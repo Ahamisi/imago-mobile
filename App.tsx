@@ -1,28 +1,29 @@
 /**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
+ * Imago MUm - Main App Component
+ * AI Ultrasound Interpretation & Care Coordination
  */
 
-import { NewAppScreen } from '@react-native/new-app-screen';
-import { StatusBar, StyleSheet, useColorScheme, View } from 'react-native';
+import React from 'react';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { NavigationContainer } from '@react-navigation/native';
+import RootNavigator from './src/navigation/RootNavigator';
+import Notification, { NotificationRef } from './src/components/common/Notification';
 
-function App() {
-  const isDarkMode = useColorScheme() === 'dark';
+const notificationRef = React.createRef<NotificationRef>();
 
-  return (
-    <View style={styles.container}>
-      <StatusBar barStyle={isDarkMode ? 'light-content' : 'dark-content'} />
-      <NewAppScreen templateFileName="App.tsx" />
-    </View>
-  );
+export const showNotification = (message: string, type: 'success' | 'error') => {
+  notificationRef.current?.show(message, type);
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-  },
-});
+const App = () => {
+  return (
+    <SafeAreaProvider>
+      <NavigationContainer>
+        <RootNavigator />
+        <Notification ref={notificationRef} />
+      </NavigationContainer>
+    </SafeAreaProvider>
+  );
+};
 
 export default App;
