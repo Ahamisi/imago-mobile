@@ -1,8 +1,8 @@
 /**
- * Onboarding Screens - Simple and Clean
+ * Onboarding Screen - AI-Powered Ultrasound Demo
  */
 
-import React, {useState, useRef} from 'react';
+import React from 'react';
 import {
   View,
   Text,
@@ -10,9 +10,9 @@ import {
   TouchableOpacity,
   StatusBar,
   Dimensions,
-  ScrollView,
+  Image,
 } from 'react-native';
-import {Colors, Typography, Spacing, BorderRadius} from '../theme';
+import {Colors, Typography, Spacing, BorderRadius, FontFamily} from '../theme';
 
 const {width: screenWidth, height: screenHeight} = Dimensions.get('window');
 
@@ -21,79 +21,69 @@ interface OnboardingScreenProps {
   onSignIn: () => void;
 }
 
-const onboardingData = [
-  {
-    id: 1,
-    title: 'Your Pregnancy, Our Priority',
-    description: 'ImagoMum+ gives you instant access to ultrasound scans, emergency help, and life-saving tools — wherever you are.',
-    backgroundColor: '#2C5F7C',
-  },
-  {
-    id: 2,
-    title: 'AI-Powered Ultrasound in Your Hands',
-    description: 'No hospital nearby? No problem. Just scan with your phone and get instant results, guidance, and peace of mind.',
-    backgroundColor: '#1F2937',
-  },
-  {
-    id: 3,
-    title: 'Multilingual & Community-Powered',
-    description: 'Speak your language, chat with fellow mums, and connect with doctors who care. Together, we protect your journey.',
-    backgroundColor: '#4A5568',
-  },
-];
-
 const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
   onGetStarted,
   onSignIn,
 }) => {
-  const [currentIndex, setCurrentIndex] = useState(0);
-  const scrollViewRef = useRef<ScrollView>(null);
-
-  const handleScroll = (event: any) => {
-    const slideSize = event.nativeEvent.layoutMeasurement.width;
-    const index = event.nativeEvent.contentOffset.x / slideSize;
-    const roundIndex = Math.round(index);
-    setCurrentIndex(roundIndex);
-  };
-
   return (
     <View style={styles.container}>
-      <StatusBar barStyle="light-content" />
+      <StatusBar barStyle="light-content" backgroundColor="#000000" />
       
-      <ScrollView
-        ref={scrollViewRef}
-        horizontal
-        pagingEnabled
-        showsHorizontalScrollIndicator={false}
-        onMomentumScrollEnd={handleScroll}
-        scrollEventThrottle={16}
-      >
-        {onboardingData.map((item) => (
-          <View key={item.id} style={[styles.slide, {backgroundColor: item.backgroundColor}]}>
-            <View style={styles.content}>
-              <Text style={styles.title}>{item.title}</Text>
-              <Text style={styles.description}>{item.description}</Text>
-              <View style={styles.indicators}>
-                {onboardingData.map((_, dotIndex) => (
-                  <View
-                    key={dotIndex}
-                    style={[
-                      styles.dot,
-                      dotIndex === currentIndex && styles.activeDot,
-                    ]}
-                  />
-                ))}
-              </View>
-              <TouchableOpacity style={styles.getStartedButton} onPress={onGetStarted}>
-                <Text style={styles.getStartedText}>Get Started</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.signInButton} onPress={onSignIn}>
-                <Text style={styles.signInText}>Sign In</Text>
-              </TouchableOpacity>
-            </View>
+      {/* Logo */}
+      <View style={styles.logoContainer}>
+          <Image 
+            source={require('../assets/logo.png')} 
+            style={styles.logo}
+            resizeMode="contain"
+          />
+      </View>
+
+      {/* Ultrasound Demo */}
+      <View style={styles.demoContainer}>
+        <Image 
+          source={require('../assets/Imagoscan.gif')} 
+          style={styles.demoGif}
+          resizeMode="contain"
+        />
+        
+        {/* Feature Tags */}
+        {/* <View style={styles.featureTag1}>
+          <View style={styles.checkIcon}>
+            <Text style={styles.checkText}>✓</Text>
           </View>
-        ))}
-      </ScrollView>
+          <Text style={styles.featureText}>Scan in 3 Seconds</Text>
+        </View> */}
+        
+        {/* <View style={styles.featureTag2}>
+          <View style={styles.checkIcon}>
+            <Text style={styles.checkText}>✓</Text>
+          </View>
+          <Text style={styles.featureText}>Printable result</Text>
+        </View> */}
+
+
+      </View>
+
+      {/* Content */}
+      <View style={styles.content}>
+        <Text style={styles.title}>
+          <Text style={styles.titleWhite}>AI-Powered <Text style={styles.titleYellow}>Ultrasound</Text> </Text>
+          <Text style={styles.titleWhite}>&nbsp;in Your Hands</Text>
+
+        </Text>
+        
+        <Text style={styles.description}>
+          No hospital nearby? No problem. Just scan with your phone and get instant results, guidance, and peace of mind
+        </Text>
+
+        <TouchableOpacity style={styles.getStartedButton} onPress={onGetStarted}>
+          <Text style={styles.getStartedText}>Get Started</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity style={styles.signInButton} onPress={onSignIn}>
+          <Text style={styles.signInText}>Sign In</Text>
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -101,68 +91,149 @@ const OnboardingScreen: React.FC<OnboardingScreenProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: '#000000',
+    paddingTop: 60,
   },
-  slide: {
-    width: screenWidth,
-    height: screenHeight,
-    justifyContent: 'flex-end',
-    paddingBottom: Spacing[10],
+  logoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+  },
+  logoIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  iconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#4A90E2',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  iconEmoji: {
+    fontSize: 20,
+  },
+  logoTextContainer: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+  },
+  logo: {
+    width: 100,
+    height: 50,
+  },
+  logoTextBlue: {
+    fontSize: 28,
+    fontFamily: FontFamily.GilroyBold,
+    color: '#4A90E2',
+    letterSpacing: -1,
+  },
+  logoTextYellow: {
+    fontSize: 28,
+    fontFamily: FontFamily.GilroyBold,
+    color: '#CFDE3A',
+    letterSpacing: -1,
+  },
+  demoContainer: {
+    alignItems: 'center',
+    marginBottom: 40,
+    position: 'relative',
+  },
+  demoGif: {
+    width: screenWidth - 20,
+    height: 300,
+  },
+  featureTag1: {
+    position: 'absolute',
+    top: 60,
+    right: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  featureTag2: {
+    position: 'absolute',
+    top: 120,
+    right: 60,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    gap: 8,
+  },
+  checkIcon: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: '#CFDE3A',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkText: {
+    color: '#000',
+    fontSize: 12,
+    fontWeight: 'bold',
+  },
+  featureText: {
+    color: '#fff',
+    fontSize: 14,
+    fontFamily: FontFamily.GilroyMedium,
   },
   content: {
     paddingHorizontal: Spacing[6],
     alignItems: 'center',
+    flex: 1,
+    justifyContent: 'flex-end',
+    paddingBottom: 60,
   },
   title: {
-    ...Typography.h1,
-    color: Colors.white,
+    fontSize: 32,
+    fontFamily: FontFamily.GilroyBold,
     textAlign: 'center',
     marginBottom: Spacing[4],
   },
+  titleWhite: {
+    color: Colors.white,
+  },
+  titleYellow: {
+    color: '#CFDE3A',
+  },
   description: {
-    ...Typography.bodyLarge,
+    ...Typography.h3,
     color: Colors.white,
     textAlign: 'center',
     marginBottom: Spacing[8],
     opacity: 0.9,
     lineHeight: 24,
   },
-  indicators: {
-    flexDirection: 'row',
-    marginBottom: Spacing[8],
-    gap: Spacing[2],
-  },
-  dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: 'rgba(255,255,255,0.4)',
-  },
-  activeDot: {
-    backgroundColor: '#F1C40F',
-    width: 24,
-  },
   getStartedButton: {
-    backgroundColor: Colors.primary[500],
+    backgroundColor: '#1997D4',
     paddingVertical: Spacing[4],
-    borderRadius: BorderRadius.xl,
+    borderRadius: 40,
     width: '100%',
     alignItems: 'center',
     marginBottom: Spacing[3],
   },
   getStartedText: {
     ...Typography.buttonLarge,
-    color: Colors.white,
+    color: '#ffffff',
   },
   signInButton: {
     backgroundColor: Colors.white,
     paddingVertical: Spacing[4],
-    borderRadius: BorderRadius.xl,
+    borderRadius: 40,
     width: '100%',
     alignItems: 'center',
   },
   signInText: {
     ...Typography.buttonLarge,
-    color: Colors.text.primary,
+    color: '#4A90E2',
   },
 });
 

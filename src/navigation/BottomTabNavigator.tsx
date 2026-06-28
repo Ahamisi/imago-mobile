@@ -2,7 +2,10 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import HomeScreen from '../screens/main/HomeScreen';
 import ChatScreen from '../screens/main/ChatScreen';
-import { ScanIcon, ChatIcon, TipsIcon, ProfileIcon } from '../components/icons';
+import TipsScreen from '../screens/main/TipsScreen';
+import ProfileScreen from '../screens/main/ProfileScreen';
+import AudioRecordingScreen from '../screens/main/AudioRecordingScreen';
+import { ScanIcon, ChatIcon, TipsIcon, ProfileIcon, MicrophoneIcon } from '../components/icons';
 import { Colors } from '../theme';
 
 const Tab = createBottomTabNavigator();
@@ -17,6 +20,8 @@ const BottomTabNavigator = () => {
 
           if (route.name === 'Scan') {
             return <ScanIcon focused={focused} />;
+          } else if (route.name === 'Audio') {
+            return <MicrophoneIcon size={size} color={color} />;
           } else if (route.name === 'Chat') {
             return <ChatIcon focused={focused} />;
           } else if (route.name === 'Tips') {
@@ -30,9 +35,10 @@ const BottomTabNavigator = () => {
       })}
     >
       <Tab.Screen name="Scan" component={HomeScreen} />
+      {/* <Tab.Screen name="Audio" component={AudioRecordingScreen} /> */}
       <Tab.Screen name="Chat" component={ChatScreen} />
-      <Tab.Screen name="Tips" component={HomeScreen} />
-      <Tab.Screen name="Profile" component={HomeScreen} />
+      <Tab.Screen name="Tips" component={TipsScreen} />
+      <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
 };

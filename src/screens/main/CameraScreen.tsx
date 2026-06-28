@@ -151,9 +151,9 @@ const CameraScreen = ({ navigation }: any) => {
     return (
       <View style={styles.loadingContainer}>
         <Text style={styles.guidanceText}>
-          Camera not available on this simulator.{'\n'}
-          Please test on a physical device or use{'\n'}
-          "Upload Image" and "Add a file" options.
+          {/* Camera not available on this simulator.{'\n'}
+          Please test on a physical device or use{'\n'} */}
+          {/* "Upload Image" and "Add a file" options. */}
         </Text>
         <View style={styles.simulatorButtons}>
           <TouchableOpacity style={styles.simulatorButton} onPress={handleImagePicker}>

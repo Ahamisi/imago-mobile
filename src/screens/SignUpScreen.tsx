@@ -53,6 +53,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({onSignUpSuccess, onLoginPres
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [errors, setErrors] = useState<ValidationErrors>({});
+  const [errorMessage, setErrorMessage] = useState('');
   
   const [passwordStrength, setPasswordStrength] = useState<{
     score: number;
@@ -156,6 +157,11 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({onSignUpSuccess, onLoginPres
       setErrors(prev => ({...prev, [field]: undefined}));
     }
     
+    // Clear general error message when user starts typing
+    if (errorMessage) {
+      setErrorMessage('');
+    }
+    
     // Live validation for password strength
     if (field === 'password') {
       setPasswordStrength(validatePassword(value));
@@ -182,7 +188,10 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({onSignUpSuccess, onLoginPres
       return;
     }
 
+    // Clear any previous error message
+    setErrorMessage('');
     setLoading(true);
+    
     try {
       const payload: SignUpPayload = {
         fullName: formData.fullName.trim(),
@@ -192,8 +201,12 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({onSignUpSuccess, onLoginPres
       };
 
       await onSignUpSuccess(payload);
-    } catch (error) {
+    } catch (error: any) {
       console.error('SignUp component error:', error);
+      
+      // The auth service already formats the error message
+      const displayMessage = error?.message || 'An unexpected error occurred. Please try again.';
+      setErrorMessage(displayMessage);
     } finally {
       setLoading(false);
     }
@@ -236,7 +249,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({onSignUpSuccess, onLoginPres
             <Text style={styles.label}>Full name</Text>
             <TextInput
               style={[styles.input, errors.fullName && styles.inputError]}
-              placeholder="Warith Yellow"
+              placeholder="Chioma Adewale"
               value={formData.fullName}
               onChangeText={(text) => handleInputChange('fullName', text)}
               autoCapitalize="words"
@@ -251,7 +264,7 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({onSignUpSuccess, onLoginPres
             <Text style={styles.label}>Email address</Text>
             <TextInput
               style={[styles.input, errors.email && styles.inputError]}
-              placeholder="yellow@gmail.com"
+              placeholder="chioma@gmail.com"
               value={formData.email}
               onChangeText={(text) => handleInputChange('email', text)}
               keyboardType="email-address"
@@ -342,6 +355,13 @@ const SignUpScreen: React.FC<SignUpScreenProps> = ({onSignUpSuccess, onLoginPres
           </View>
         </View>
 
+        {/* General Error Message */}
+        {errorMessage && (
+          <View style={styles.errorContainer}>
+            <Text style={styles.errorMessageText}>{errorMessage}</Text>
+          </View>
+        )}
+
         {/* Continue Button */}
         <TouchableOpacity
           style={[styles.continueButton, loading && styles.disabledButton]}
@@ -418,10 +438,14 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   input: {
-    ...Typography.body,
+    fontSize: 16,
+    fontFamily: Typography.body.fontFamily,
+    fontWeight: '400',
+    lineHeight: 20,
     backgroundColor: Colors.background.secondary,
     borderRadius: BorderRadius.lg,
     paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[4],
     borderWidth: 1,
     borderColor: Colors.gray[200],
     color: Colors.text.primary,
@@ -441,9 +465,13 @@ const styles = StyleSheet.create({
     height: 52,
   },
   passwordInput: {
-    ...Typography.body,
+    fontSize: 16,
+    fontFamily: Typography.body.fontFamily,
+    fontWeight: '400',
+    lineHeight: 20,
     flex: 1,
     paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[4],
     color: Colors.text.primary,
   },
   eyeButton: {
@@ -464,6 +492,19 @@ const styles = StyleSheet.create({
     ...Typography.caption,
     color: Colors.success[500],
     marginTop: Spacing[1],
+  },
+  errorContainer: {
+    marginBottom: Spacing[4],
+    padding: Spacing[3],
+    backgroundColor: Colors.error[50],
+    borderRadius: BorderRadius.md,
+    borderWidth: 1,
+    borderColor: Colors.error[200],
+  },
+  errorMessageText: {
+    ...Typography.bodySmall,
+    color: Colors.error[600],
+    textAlign: 'center',
   },
   continueButton: {
     backgroundColor: Colors.primary[500],

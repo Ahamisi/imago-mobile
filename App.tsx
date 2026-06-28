@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { NavigationContainer } from '@react-navigation/native';
 import RootNavigator from './src/navigation/RootNavigator';
 import Notification, { NotificationRef } from './src/components/common/Notification';
+import { navigationRef } from './src/services/navigationService';
 
 const notificationRef = React.createRef<NotificationRef>();
 
@@ -18,7 +19,7 @@ export const showNotification = (message: string, type: 'success' | 'error') => 
 const App = () => {
   return (
     <SafeAreaProvider>
-      <NavigationContainer>
+      <NavigationContainer ref={navigationRef}>
         <RootNavigator />
         <Notification ref={notificationRef} />
       </NavigationContainer>

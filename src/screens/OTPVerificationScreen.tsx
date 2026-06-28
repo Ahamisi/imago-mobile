@@ -12,6 +12,8 @@ import {
   StatusBar,
   TextInput,
   Alert,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import {Colors, Typography, Spacing, BorderRadius} from '../theme';
 import CountdownTimer from '../components/CountdownTimer';
@@ -21,6 +23,7 @@ interface OTPVerificationScreenProps {
   fromLogin?: boolean;
   onVerifySuccess: (otp: string) => void;
   onResendOTP: (email: string) => void;
+  onBackToLogin?: () => void;
 }
 
 const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
@@ -28,22 +31,30 @@ const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
   fromLogin = false,
   onVerifySuccess,
   onResendOTP,
+  onBackToLogin,
 }) => {
   const [otp, setOtp] = useState<string[]>(Array(6).fill(''));
   const [isResending, setIsResending] = useState(false);
   const [canResend, setCanResend] = useState(fromLogin); // Allow immediate resend if from login
+  const [countdown, setCountdown] = useState(60); // 60 seconds countdown
   const inputRefs = React.useRef<Array<TextInput | null>>([]);
 
   // Countdown timer logic
   useEffect(() => {
     let interval: NodeJS.Timeout;
-    if (canResend) {
+    if (!canResend && countdown > 0) {
       interval = setInterval(() => {
-        setCanResend(prev => prev - 1);
+        setCountdown(prev => {
+          if (prev <= 1) {
+            setCanResend(true);
+            return 0;
+          }
+          return prev - 1;
+        });
       }, 1000);
     }
     return () => clearInterval(interval);
-  }, [canResend]);
+  }, [canResend, countdown]);
 
   // Format timer for display
   const formatTime = (seconds: number) => {
@@ -58,27 +69,56 @@ const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
       const newOtp = [...otp];
       newOtp[index] = value;
       setOtp(newOtp);
+
+      // Auto-focus next input if value is entered
+      if (value && index < 5) {
+        inputRefs.current[index + 1]?.focus();
+      } else if (value && index === 5) {
+        // If this is the last digit, check if OTP is complete
+        const isComplete = newOtp.every(digit => digit !== '');
+        if (isComplete) {
+          // Auto-dismiss keyboard when OTP is complete
+          Keyboard.dismiss();
+        }
+      }
     }
   };
 
   const handleVerifyOTP = async () => {
-    if (otp.length !== 6) {
+    const otpString = otp.join('');
+    if (otpString.length !== 6) {
       Alert.alert('Invalid OTP', 'Please enter all 6 digits.');
       return;
     }
 
     setIsResending(true);
     try {
-      await onVerifySuccess(otp.join(''));
+      await onVerifySuccess(otpString);
+      // Success - let parent handle navigation
     } catch (error: any) {
-      Alert.alert('Verification Failed', error.message || 'An incorrect OTP was entered.');
+      // Don't redirect on failure - stay on OTP screen
+      console.error('OTP Verification failed:', error);
+      
+      // Clear the OTP input for retry
+      setOtp(Array(6).fill(''));
+      
+      // Show error message but stay on screen
+      Alert.alert(
+        'Verification Failed', 
+        error.message || 'The verification code is incorrect. Please try again.',
+        [
+          {
+            text: 'Try Again',
+            onPress: () => {
+              // Focus first input for retry
+              inputRefs.current[0]?.focus();
+            }
+          }
+        ]
+      );
     } finally {
       setIsResending(false);
     }
-  };
-
-  const handleResendFinish = () => {
-    setCanResend(true);
   };
 
   const handleResendOTP = async () => {
@@ -87,6 +127,8 @@ const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
     try {
       await onResendOTP(email);
       setCanResend(false); // Reset timer
+      setCountdown(60); // Reset countdown
+      Alert.alert('Success', 'Verification code sent successfully!');
     } catch (error) {
       Alert.alert('Error', 'Failed to resend OTP. Please try again.');
     } finally {
@@ -99,23 +141,29 @@ const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
     inputRefs.current[index]?.focus();
   };
 
+  // Dismiss keyboard when tapping outside
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
+
   return (
-    <View style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={Colors.background.primary} />
-      
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.backButton} onPress={() => {}}>
-          <Text style={styles.backIcon}>←</Text>
-        </TouchableOpacity>
-        <Text style={styles.title}>
-          {fromLogin ? 'Verify Your Account' : 'Verify Your Email'}
-        </Text>
-        <View style={styles.placeholder} />
-      </View>
-      
-      {/* Content */}
-      <View style={styles.content}>
+    <TouchableWithoutFeedback onPress={dismissKeyboard}>
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" backgroundColor={Colors.background.primary} />
+        
+        {/* Header */}
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => {}}>
+            <Text style={styles.backIcon}>←</Text>
+          </TouchableOpacity>
+          <Text style={styles.title}>
+            {fromLogin ? 'Verify Your Account' : 'Verify Your Email'}
+          </Text>
+          <View style={styles.placeholder} />
+        </View>
+        
+        {/* Content */}
+        <View style={styles.content}>
         <Text style={styles.subtitle}>
           {fromLogin 
             ? `Please verify your account to continue. We've sent a verification code to ${email}`
@@ -141,10 +189,17 @@ const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
         {Array.from({length: 6}).map((_, index) => (
           <TextInput
             key={index}
-            ref={el => inputRefs.current[index] = el}
+            ref={el => {
+              inputRefs.current[index] = el;
+            }}
             style={styles.hiddenInput}
             value={otp[index]}
             onChangeText={value => handleOtpChange(value, index)}
+            onKeyPress={({nativeEvent}) => {
+              if (nativeEvent.key === 'Backspace' && !otp[index] && index > 0) {
+                inputRefs.current[index - 1]?.focus();
+              }
+            }}
             keyboardType="number-pad"
             maxLength={1}
             caretHidden
@@ -152,13 +207,13 @@ const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
         ))}
 
         {/* Timer and Resend */}
-        <Text style={styles.timer}>{formatTime(canResend)} secs remaining</Text>
+        {!canResend && (
+          <Text style={styles.timer}>{formatTime(countdown)} remaining</Text>
+        )}
+        
         <View style={styles.resendContainer}>
-          {!canResend && !fromLogin ? (
-            <>
-              <Text style={styles.resendText}>Resend code in </Text>
-              <CountdownTimer onFinish={handleResendFinish} />
-            </>
+          {!canResend ? (
+            <Text style={styles.resendText}>Resend code in {formatTime(countdown)}</Text>
           ) : (
             <>
               <Text style={styles.resendText}>Didn't receive the code? </Text>
@@ -170,21 +225,32 @@ const OTPVerificationScreen: React.FC<OTPVerificationScreenProps> = ({
             </>
           )}
         </View>
+
+        {/* Back to Login Link */}
+        {onBackToLogin && (
+          <View style={styles.backToLoginContainer}>
+            <Text style={styles.backToLoginText}>Having trouble? </Text>
+            <TouchableOpacity onPress={onBackToLogin}>
+              <Text style={styles.backToLoginLink}>Back to Login</Text>
+            </TouchableOpacity>
+          </View>
+        )}
       </View>
       
       {/* Continue Button */}
       <View style={styles.buttonContainer}>
         <TouchableOpacity
-          style={[styles.continueButton, (isResending || otp.length < 6) && styles.disabledButton]}
+          style={[styles.continueButton, (isResending || otp.join('').length < 6) && styles.disabledButton]}
           onPress={handleVerifyOTP}
-          disabled={isResending || otp.length < 6}
+          disabled={isResending || otp.join('').length < 6}
         >
           <Text style={styles.continueText}>
             {isResending ? 'Verifying...' : 'Continue'}
           </Text>
         </TouchableOpacity>
       </View>
-    </View>
+      </View>
+    </TouchableWithoutFeedback>
   );
 };
 
@@ -299,6 +365,20 @@ const styles = StyleSheet.create({
   countdownText: {
     ...Typography.bodySmall,
     color: Colors.secondary[500],
+    fontWeight: '600',
+  },
+  backToLoginContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: Spacing[6],
+  },
+  backToLoginText: {
+    ...Typography.bodySmall,
+    color: Colors.text.secondary,
+  },
+  backToLoginLink: {
+    ...Typography.bodySmall,
+    color: Colors.primary[500],
     fontWeight: '600',
   },
 });

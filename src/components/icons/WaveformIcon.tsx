@@ -2,50 +2,56 @@ import React from 'react';
 import Svg, { Rect } from 'react-native-svg';
 
 interface WaveformIconProps {
-  width?: number;
-  height?: number;
+  size?: number;
   color?: string;
+  animated?: boolean;
 }
 
-export const WaveformIcon: React.FC<WaveformIconProps> = ({
-  width = 343,
-  height = 40,
-  color = '#0A3C55'
+export const WaveformIcon: React.FC<WaveformIconProps> = ({ 
+  size = 24, 
+  color = '#000000',
+  animated = false 
 }) => {
+  const bars = [
+    { height: 4, delay: 0 },
+    { height: 8, delay: 0.1 },
+    { height: 12, delay: 0.2 },
+    { height: 16, delay: 0.3 },
+    { height: 8, delay: 0.4 },
+    { height: 12, delay: 0.5 },
+    { height: 6, delay: 0.6 },
+    { height: 14, delay: 0.7 },
+    { height: 10, delay: 0.8 },
+  ];
+
   return (
-    <Svg width={width} height={height} viewBox="0 0 343 40" fill="none">
-      <Rect y="16" width="2" height="8" rx="1" fill={color} />
-      <Rect x="11" y="16" width="2" height="8" rx="1" fill={color} />
-      <Rect x="22" y="16" width="2" height="8" rx="1" fill={color} />
-      <Rect x="33" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="44" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="55" y="8" width="2" height="24" rx="1" fill={color} />
-      <Rect x="66" y="8" width="2" height="24" rx="1" fill={color} />
-      <Rect x="77" width="2" height="40" rx="1" fill={color} />
-      <Rect x="88" y="8" width="2" height="24" rx="1" fill={color} />
-      <Rect x="99" y="8" width="2" height="24" rx="1" fill={color} />
-      <Rect x="110" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="121" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="132" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="143" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="154" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="165" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="176" y="16" width="2" height="8" rx="1" fill={color} />
-      <Rect x="187" y="16" width="2" height="8" rx="1" fill={color} />
-      <Rect x="198" y="16" width="2" height="8" rx="1" fill={color} />
-      <Rect x="209" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="220" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="231" y="8" width="2" height="24" rx="1" fill={color} />
-      <Rect x="242" y="8" width="2" height="24" rx="1" fill={color} />
-      <Rect x="253" width="2" height="40" rx="1" fill={color} />
-      <Rect x="264" y="8" width="2" height="24" rx="1" fill={color} />
-      <Rect x="275" y="8" width="2" height="24" rx="1" fill={color} />
-      <Rect x="286" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="297" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="308" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="319" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="330" y="13" width="2" height="14" rx="1" fill={color} />
-      <Rect x="341" y="13" width="2" height="14" rx="1" fill={color} />
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      {bars.map((bar, index) => (
+        <Rect
+          key={index}
+          x={index * 2.5 + 1}
+          y={12 - bar.height / 2}
+          width={1.5}
+          height={bar.height}
+          fill={color}
+          opacity={animated ? 0.7 : 1}
+        />
+      ))}
     </Svg>
   );
-}; 
+};
+
+export const SoundWaveIcon: React.FC<WaveformIconProps> = ({ 
+  size = 24, 
+  color = '#000000' 
+}) => {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 24 24" fill="none">
+      <Rect x="2" y="10" width="2" height="4" fill={color} />
+      <Rect x="6" y="8" width="2" height="8" fill={color} />
+      <Rect x="10" y="6" width="2" height="12" fill={color} />
+      <Rect x="14" y="8" width="2" height="8" fill={color} />
+      <Rect x="18" y="10" width="2" height="4" fill={color} />
+    </Svg>
+  );
+};

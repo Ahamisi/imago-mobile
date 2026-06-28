@@ -38,15 +38,19 @@ const OnboardingCompleteScreen: React.FC<OnboardingCompleteScreenProps> = ({
         <Text style={styles.infoTitle}>About your pregnancy</Text>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Pregnancy Stage</Text>
-          <Text style={styles.infoValue}>{pregnancyInfo.pregnancyStage}</Text>
+          <Text style={styles.infoValue}>{pregnancyInfo.gestationalAge}</Text>
+        </View>
+        <View style={styles.infoRow}>
+          <Text style={styles.infoLabel}>Days Pregnant</Text>
+          <Text style={styles.infoValue}>{pregnancyInfo.daysPregnant} Days</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Current trimester</Text>
-          <Text style={styles.infoValue}>{pregnancyInfo.currentTrimester}</Text>
+          <Text style={styles.infoValue}>{pregnancyInfo.trimester}</Text>
         </View>
         <View style={styles.infoRow}>
           <Text style={styles.infoLabel}>Expected Due date:</Text>
-          <Text style={styles.infoValue}>{pregnancyInfo.expectedDueDate}</Text>
+          <Text style={styles.infoValue}>{pregnancyInfo.eddFormatted}</Text>
         </View>
       </View>
       
@@ -84,6 +88,12 @@ const styles = StyleSheet.create({
     ...Typography.h3,
     color: Colors.text.primary,
     fontWeight: '700',
+  },
+  infoTitle: {
+    ...Typography.bodySmall,
+    color: Colors.text.primary,
+    fontWeight: '700',
+    marginBottom: Spacing[4],
   },
   infoContainer: {
     width: '100%',

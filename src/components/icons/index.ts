@@ -1,6 +1,6 @@
 export { default as CalendarIcon } from './CalendarIcon';
 export { default as CheckIcon } from './CheckIcon';
-export { default as EyeIcon } from './EyeIcon';
+export { default as EyeIcon, EyeSlashIcon } from './EyeIcon';
 export { default as BellIcon } from './BellIcon';
 export { default as CameraIcon } from './CameraIcon';
 export { default as UploadIcon } from './UploadIcon';
@@ -16,7 +16,6 @@ export { default as GestationalAgeIcon } from './GestationalAgeIcon';
 export { default as ScanReadyIcon } from './ScanReadyIcon';
 export { default as RulerIcon } from './RulerIcon';
 export { default as BabyIcon } from './BabyIcon';
-export { default as DueDateIcon } from './DueDateIcon';
 export { default as DownloadIcon } from './DownloadIcon';
 export { default as ShareIcon } from './ShareIcon';
 export { default as InfoIcon } from './InfoIcon';
@@ -26,3 +25,20 @@ export { default as FlashOnIcon } from './FlashOnIcon';
 export { default as FlashOffIcon } from './FlashOffIcon';
 export { default as UploadImageIcon } from './UploadImageIcon';
 export { default as AddFileIcon } from './AddFileIcon';
+export { default as SearchIcon } from './SearchIcon';
+export { default as PregnancyStageIcon } from './PregnancyStageIcon';
+export { default as TrimesterIcon } from './TrimesterIcon';
+export { default as DueDateIcon } from './DueDateIcon';
+export { default as LogoutIcon } from './LogoutIcon';
+export { default as HelpIcon } from './HelpIcon';
+export { default as SecurityIcon } from './SecurityIcon';
+export { default as ProfileUserIcon } from './ProfileUserIcon';
+export { default as EditIcon } from './EditIcon';
+export { ImagoAIAvatarIcon } from './ImagoAIAvatarIcon';
+
+// Audio Icons
+export { MicrophoneIcon, MicrophoneOffIcon } from './MicrophoneIcon';
+export { WaveformIcon, SoundWaveIcon } from './WaveformIcon';
+export { PlayIcon, PauseIcon, StopIcon, VolumeIcon } from './PlaybackIcon';
+export { SettingsIcon, ModelIcon, LanguageIcon } from './SettingsIcon';
+export { default as SparkleIcon } from './SparkleIcon';

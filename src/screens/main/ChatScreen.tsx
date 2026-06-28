@@ -12,6 +12,8 @@ import {
   Platform,
   Animated,
   ActivityIndicator,
+  KeyboardAvoidingView,
+  Keyboard,
 } from 'react-native';
 import DocumentPicker from 'react-native-document-picker';
 import { Colors } from '../../theme/colors';
@@ -28,6 +30,10 @@ import { NewChatIcon } from '../../components/icons/NewChatIcon';
 import { SendIcon } from '../../components/icons/SendIcon';
 import chatService, { ChatConversation, ChatThread, ChatMessage as APIChatMessage } from '../../services/chatService';
 import LinearGradient from 'react-native-linear-gradient';
+import Markdown from 'react-native-markdown-display';
+import { audioChatService } from '../../services/audioChatService';
+import StorageService, { UserData } from '../../utils/storage';
+import { WebView } from 'react-native-webview';
 
 interface ChatHistoryItem {
   id: string;
@@ -45,7 +51,7 @@ interface ChatMessage {
   fileName?: string;
 }
 
-type ChatScreenMode = 'history' | 'chat' | 'newChat';
+type ChatScreenMode = 'history' | 'chat' | 'newChat' | 'voiceChat' | 'webVoiceChat';
 
 // Helper function to format dates in a friendly way
 const formatFriendlyDate = (dateString: string): string => {
@@ -96,9 +102,63 @@ const ChatScreen: React.FC = () => {
   const [streamingMessage, setStreamingMessage] = useState('');
   const [isSending, setIsSending] = useState(false);
   const [isTyping, setIsTyping] = useState(false);
+  const [userData, setUserData] = useState<UserData | null>(null);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
   
   // Ref for auto-scrolling chat messages
   const flatListRef = useRef<FlatList>(null);
+
+  // Helper function to get time-based greeting
+  const getTimeBasedGreeting = (): string => {
+    const hour = new Date().getHours();
+    if (hour < 12) return 'Good morning';
+    if (hour < 17) return 'Good afternoon';
+    return 'Good evening';
+  };
+
+  // Helper function to get first name from full name
+  const getFirstName = (fullName: string): string => {
+    return fullName.split(' ')[0];
+  };
+
+  // Load user data on component mount
+  useEffect(() => {
+    const loadUserData = async () => {
+      try {
+        const user = await StorageService.getUserData();
+        setUserData(user);
+      } catch (error) {
+        console.error('Error loading user data:', error);
+      }
+    };
+    
+    loadUserData();
+  }, []);
+
+  // Keyboard event listeners
+  useEffect(() => {
+    const keyboardDidShowListener = Keyboard.addListener(
+      'keyboardDidShow',
+      (e) => {
+        setKeyboardHeight(e.endCoordinates.height);
+        // Auto-scroll to bottom when keyboard shows
+        setTimeout(() => {
+          flatListRef.current?.scrollToEnd({ animated: true });
+        }, 100);
+      }
+    );
+    const keyboardDidHideListener = Keyboard.addListener(
+      'keyboardDidHide',
+      () => {
+        setKeyboardHeight(0);
+      }
+    );
+
+    return () => {
+      keyboardDidHideListener?.remove();
+      keyboardDidShowListener?.remove();
+    };
+  }, []);
 
   useEffect(() => {
     let interval: NodeJS.Timeout;
@@ -197,6 +257,49 @@ const ChatScreen: React.FC = () => {
   useEffect(() => {
     loadThreads();
   }, []);
+
+  // Track if component is mounted to prevent state updates after unmount
+  const isMountedRef = useRef(true);
+  const recordingTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Cleanup audio service on unmount
+  useEffect(() => {
+    return () => {
+      // Mark component as unmounted
+      isMountedRef.current = false;
+      
+      // Force stop recording if it's active during unmount
+      console.log('🧹 ChatScreen unmounting, cleaning up audio service...');
+      console.log('🧹 [VOICE_DEBUG] Recording state during unmount:', isRecording);
+      
+      // Clear recording timer
+      if (recordingTimerRef.current) {
+        console.log('🧹 [VOICE_DEBUG] Clearing recording timer during unmount...');
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+      }
+      
+      if (isRecording) {
+        console.log('🧹 [VOICE_DEBUG] Force stopping active recording during unmount...');
+        try {
+          audioChatService.stopVoiceChat();
+          audioChatService.disconnect();
+          console.log('🧹 [VOICE_DEBUG] Force stop completed');
+        } catch (error) {
+          console.error('🧹 [VOICE_DEBUG] Error force stopping recording:', error);
+        }
+      }
+      
+      // Cleanup audio service when component unmounts
+      try {
+        audioChatService.cleanup();
+        console.log('🧹 [VOICE_DEBUG] Audio service cleanup completed');
+      } catch (error) {
+        console.error('Error during ChatScreen cleanup:', error);
+        // Don't throw - just log the error
+      }
+    };
+  }, [isRecording]);
 
   const loadThreads = async () => {
     try {
@@ -341,24 +444,225 @@ const ChatScreen: React.FC = () => {
   // Voice recording functionality
   const startRecording = async () => {
     try {
+      console.log('🎤 [VOICE_DEBUG] === START RECORDING INITIATED ===');
+      console.log('🎤 [VOICE_DEBUG] Component mounted:', isMountedRef.current);
+      
+      // Don't start recording if component is unmounted
+      if (!isMountedRef.current) {
+        console.log('🎤 [VOICE_DEBUG] Component unmounted, aborting recording start');
+        return;
+      }
+      
+      console.log('🎤 [VOICE_DEBUG] Current recording state:', isRecording);
+      console.log('🎤 [VOICE_DEBUG] Current mode:', mode);
+      
+      // If we're not in a chat, start a new one
+      if (mode === 'history') {
+        console.log('🎤 [VOICE_DEBUG] Starting new chat for voice recording...');
+        setCurrentThreadId(null);
+        setCurrentThread(null);
+        setCurrentConversation(null);
+        setMessages([]);
+        setMode('newChat');
+      }
+      
+      console.log('🎤 [VOICE_DEBUG] Setting recording state to true...');
       setIsRecording(true);
+      console.log('🎤 [VOICE_DEBUG] Setting recording time to 0...');
       setRecordingTime(0);
-      // Here you would start actual recording
-      console.log('Started recording...');
-    } catch (error) {
-      console.error('Recording start error:', error);
+      
+      console.log('🎤 [VOICE_DEBUG] Setting up audio chat callbacks...');
+      // Set up audio chat callbacks
+      audioChatService.onStatus = (status) => {
+        console.log('🔊 [VOICE_DEBUG] Audio status:', status);
+      };
+      
+      audioChatService.onInterimTranscript = (transcript) => {
+        console.log('👂 [VOICE_DEBUG] Interim transcript:', transcript);
+        // Could update UI with interim transcript
+      };
+      
+      audioChatService.onFinalTranscript = (transcript) => {
+        console.log('🗣️ [VOICE_DEBUG] Final transcript received:', transcript);
+        console.log('🗣️ [VOICE_DEBUG] Component mounted check:', isMountedRef.current);
+        // Add user message to chat (only if component is mounted)
+        if (isMountedRef.current && transcript.trim()) {
+          console.log('🗣️ [VOICE_DEBUG] Adding user message to chat...');
+          const userMessage: APIChatMessage = {
+            id: Date.now().toString(),
+            messageType: 'user',
+            content: transcript,
+            createdAt: new Date().toISOString(),
+            contentType: 'text'
+          };
+          console.log('🗣️ [VOICE_DEBUG] User message created:', userMessage);
+          setMessages(prev => {
+            console.log('🗣️ [VOICE_DEBUG] Previous messages count:', prev.length);
+            const newMessages = [...prev, userMessage];
+            console.log('🗣️ [VOICE_DEBUG] New messages count:', newMessages.length);
+            return newMessages;
+          });
+          console.log('🗣️ [VOICE_DEBUG] User message added successfully');
+          
+          // Switch to chat mode if we're in newChat mode
+          if (mode === 'newChat') {
+            console.log('🗣️ [VOICE_DEBUG] Switching from newChat to chat mode');
+            setMode('chat');
+          }
+        } else {
+          console.log('🗣️ [VOICE_DEBUG] Skipping message add - component unmounted or empty transcript');
+        }
+      };
+      
+      audioChatService.onAIProcessing = (message) => {
+        console.log('🤖 [VOICE_DEBUG] AI processing:', message);
+        console.log('🤖 [VOICE_DEBUG] Component mounted check:', isMountedRef.current);
+        if (isMountedRef.current) {
+          console.log('🤖 [VOICE_DEBUG] Setting typing state to true...');
+          setIsTyping(true);
+          console.log('🤖 [VOICE_DEBUG] Typing state set successfully');
+        }
+      };
+      
+      audioChatService.onAIComplete = (message) => {
+        console.log('✅ [VOICE_DEBUG] AI complete:', message);
+        console.log('✅ [VOICE_DEBUG] Component mounted check:', isMountedRef.current);
+        if (isMountedRef.current) {
+          console.log('✅ [VOICE_DEBUG] Setting typing state to false...');
+          setIsTyping(false);
+          console.log('✅ [VOICE_DEBUG] Adding AI response to chat...');
+          
+          // Add AI response message
+          const aiMessage: APIChatMessage = {
+            id: Date.now().toString(),
+            messageType: 'assistant',
+            content: message,
+            createdAt: new Date().toISOString(),
+            contentType: 'text'
+          };
+          
+          setMessages(prev => [...prev, aiMessage]);
+          console.log('✅ [VOICE_DEBUG] AI response added successfully');
+        }
+      };
+      
+      audioChatService.onAudioReceived = (audioData) => {
+        console.log('🔊 [VOICE_DEBUG] Audio received:', audioData.size, 'bytes');
+        // Audio will be played automatically by the service
+      };
+      
+      audioChatService.onError = (error) => {
+        console.error('❌ [VOICE_DEBUG] Audio error received:', error);
+        console.log('❌ [VOICE_DEBUG] Component mounted check:', isMountedRef.current);
+        Alert.alert('Voice Chat Error', error);
+        if (isMountedRef.current) {
+          console.log('❌ [VOICE_DEBUG] Setting recording to false due to error...');
+          setIsRecording(false);
+          console.log('❌ [VOICE_DEBUG] Setting mode to history due to error...');
+          setMode('history'); // Return to history view on error
+          console.log('❌ [VOICE_DEBUG] Error handling completed');
+        }
+      };
+      
+      console.log('🎤 [VOICE_DEBUG] Setting thread ID:', currentThreadId);
+      // Set thread ID for conversation continuity
+      audioChatService.setThreadId(currentThreadId);
+      
+      console.log('🎤 [VOICE_DEBUG] Initiating connection...');
+      // Connect to audio service but don't start recording yet
+      await audioChatService.connect();
+      console.log('🎤 [VOICE_DEBUG] Connection successful, starting voice chat...');
+      
+      await audioChatService.startVoiceChat('nova-3', 'en-US');
+      console.log('🎤 [VOICE_DEBUG] Voice chat started successfully');
+      
+      // Start recording timer
+      recordingTimerRef.current = setInterval(() => {
+        if (isMountedRef.current && isRecording) {
+          setRecordingTime(prev => prev + 1);
+        } else {
+          if (recordingTimerRef.current) {
+            clearInterval(recordingTimerRef.current);
+            recordingTimerRef.current = null;
+          }
+        }
+      }, 1000);
+      
+      console.log('🎤 [VOICE_DEBUG] === START RECORDING COMPLETED ===');
+      
+    } catch (error: any) {
+      console.error('❌ [VOICE_DEBUG] === START RECORDING FAILED ===');
+      console.error('❌ [VOICE_DEBUG] Recording start error:', error);
+      console.error('❌ [VOICE_DEBUG] Error message:', error.message);
+      console.error('❌ [VOICE_DEBUG] Error stack:', error.stack);
+      console.log('❌ [VOICE_DEBUG] Setting recording to false due to error...');
       setIsRecording(false);
+      const errorMessage = error.message || 'Failed to start voice recording. Please check microphone permissions.';
+      Alert.alert('Voice Chat Error', errorMessage);
+      console.log('❌ [VOICE_DEBUG] Setting mode to history due to error...');
+      setMode('history'); // Return to history view on error
+      console.log('❌ [VOICE_DEBUG] === START RECORDING ERROR HANDLING COMPLETED ===');
     }
   };
 
   const stopRecording = async () => {
     try {
-      setIsRecording(false);
-      // Here you would stop actual recording and process the audio
-      console.log('Stopped recording...');
-      Alert.alert('Recording Complete', `Recorded for ${recordingTime} seconds`);
-    } catch (error) {
-      console.error('Recording stop error:', error);
+      console.log('🛑 [VOICE_DEBUG] === STOP RECORDING INITIATED ===');
+      console.log('🛑 [VOICE_DEBUG] User requested to stop recording...');
+      console.log('🛑 [VOICE_DEBUG] Component mounted:', isMountedRef.current);
+      console.log('🛑 [VOICE_DEBUG] Current recording state:', isRecording);
+      console.log('🛑 [VOICE_DEBUG] Current mode:', mode);
+      
+      // Prevent multiple stop calls
+      if (!isRecording) {
+        console.log('🛑 [VOICE_DEBUG] Recording already stopped, ignoring...');
+        return;
+      }
+      
+      // Clear the recording timer first
+      if (recordingTimerRef.current) {
+        console.log('🛑 [VOICE_DEBUG] Clearing recording timer...');
+        clearInterval(recordingTimerRef.current);
+        recordingTimerRef.current = null;
+        console.log('🛑 [VOICE_DEBUG] Recording timer cleared');
+      }
+      
+      // Set UI state first to prevent multiple calls (only if component is mounted)
+      console.log('🛑 [VOICE_DEBUG] Checking if component is mounted before setting state...');
+      if (isMountedRef.current) {
+        console.log('🛑 [VOICE_DEBUG] Component is mounted, setting recording to false...');
+        setIsRecording(false);
+        setRecordingTime(0); // Reset timer immediately
+        console.log('🛑 [VOICE_DEBUG] Recording state and timer reset successfully');
+      } else {
+        console.log('🛑 [VOICE_DEBUG] Component is unmounted, skipping state update');
+      }
+      
+      console.log('🛑 [VOICE_DEBUG] Stopping voice chat...');
+      // Stop voice chat and disconnect
+      await audioChatService.stopVoiceChat();
+      console.log('🛑 [VOICE_DEBUG] Voice chat stopped, disconnecting...');
+      
+      audioChatService.disconnect();
+      console.log('🛑 [VOICE_DEBUG] Audio service disconnected');
+      
+      console.log('✅ [VOICE_DEBUG] Voice chat stopped successfully');
+      
+      // Voice recording completed - stay in current mode, no need to change UI
+      console.log('🛑 [VOICE_DEBUG] Voice recording completed successfully - staying in current mode');
+      
+      console.log('🛑 [VOICE_DEBUG] === STOP RECORDING COMPLETED ===');
+      
+    } catch (error: any) {
+      console.error('❌ [VOICE_DEBUG] === STOP RECORDING FAILED ===');
+      console.error('❌ [VOICE_DEBUG] Recording stop error:', error);
+      console.error('❌ [VOICE_DEBUG] Error message:', error.message);
+      console.error('❌ [VOICE_DEBUG] Error stack:', error.stack);
+      // Don't show alert for stop errors - just log them
+      // The recording state is already set to false
+      // Voice recording error - stay in current mode, no need to change UI
+      console.log('🔄 [VOICE_DEBUG] Voice recording error - staying in current mode');
+      console.log('❌ [VOICE_DEBUG] === STOP RECORDING ERROR HANDLING COMPLETED ===');
     }
   };
 
@@ -399,10 +703,13 @@ const ChatScreen: React.FC = () => {
       
       // Refresh threads list
       await loadThreads();
-    } catch (error) {
-      console.error('Failed to send quick message:', error);
-      Alert.alert('Error', 'Failed to send message. Please try again.');
-    } finally {
+          } catch (error: any) {
+        console.error('Failed to send quick message:', error);
+        // Don't show alert for 401 errors - they're handled by global logout
+        if (error.response?.status !== 401) {
+          Alert.alert('Error', 'Failed to send message. Please try again.');
+        }
+      } finally {
       setIsSending(false);
       setIsTyping(false);
     }
@@ -466,9 +773,13 @@ const ChatScreen: React.FC = () => {
       
       // Refresh threads list to get updated conversation
       await loadThreads();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send message:', error);
-      Alert.alert('Error', 'Failed to send message. Please try again.');
+      
+      // Don't show alert for 401 errors - they're handled by global logout
+      if (error.response?.status !== 401) {
+        Alert.alert('Error', 'Failed to send message. Please try again.');
+      }
       
       // Restore message text on error
       setMessageText(messageToSend);
@@ -493,9 +804,12 @@ const ChatScreen: React.FC = () => {
       
       setMessages(prev => [...prev, response.userMessage, response.aiMessage]);
       await loadThreads();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send image:', error);
-      Alert.alert('Error', 'Failed to send image. Please try again.');
+      // Don't show alert for 401 errors - they're handled by global logout
+      if (error.response?.status !== 401) {
+        Alert.alert('Error', 'Failed to send image. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -513,9 +827,12 @@ const ChatScreen: React.FC = () => {
       
       setMessages(prev => [...prev, response.userMessage, response.aiMessage]);
       await loadThreads();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to send voice message:', error);
-      Alert.alert('Error', 'Failed to send voice message. Please try again.');
+      // Don't show alert for 401 errors - they're handled by global logout
+      if (error.response?.status !== 401) {
+        Alert.alert('Error', 'Failed to send voice message. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }
@@ -642,9 +959,11 @@ const ChatScreen: React.FC = () => {
         <View style={styles.aiMessageContainer}>
           <ImagoAIAvatarIcon size={40} />
           <View style={styles.aiMessageBubble}>
-            <Text style={[Typography.body, styles.aiMessageText]}>
+            <Markdown
+              style={markdownStyles}
+            >
               {item.content}
-            </Text>
+            </Markdown>
           </View>
         </View>
       );
@@ -685,24 +1004,35 @@ const ChatScreen: React.FC = () => {
   const renderChatHistory = () => (
     <View style={styles.container}>
       <View style={styles.header}>
-        <Text style={[Typography.h2, styles.headerTitle]}>Chat History</Text>
-        <TouchableOpacity
-          style={styles.newChatButtonOutline}
-          onPress={() => {
-            // Reset threadId to start a fresh conversation
-            setCurrentThreadId(null);
-            setCurrentThread(null);
-            setCurrentConversation(null);
-            setMessages([]);
-            setMode('newChat');
-            console.log('🆕 Starting new chat - reset threadId');
-          }}
-        >
-          <NewChatIcon size={16} color={Colors.primary[500]} />
-          <Text style={[Typography.body, styles.newChatButtonOutlineText]}>
-            New chat
-          </Text>
-        </TouchableOpacity>
+        <Text style={[Typography.h3, styles.headerTitle]}>Chat History</Text>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity
+            style={styles.voiceButtonOutline}
+            onPress={() => setMode('webVoiceChat')}
+          >
+            <MicrophoneIcon size={16} color={Colors.primary[500]} />
+            <Text style={[Typography.body, styles.voiceButtonOutlineText, { color: Colors.primary[500] }]}>
+              Voice Chat
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.newChatButtonOutline}
+            onPress={() => {
+              // Reset threadId to start a fresh conversation
+              setCurrentThreadId(null);
+              setCurrentThread(null);
+              setCurrentConversation(null);
+              setMessages([]);
+              setMode('newChat');
+              console.log('🆕 Starting new chat - reset threadId');
+            }}
+          >
+            <NewChatIcon size={16} color={Colors.primary[500]} />
+            <Text style={[Typography.body, styles.newChatButtonOutlineText]}>
+              New chat
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
       <FlatList
         data={threads}
@@ -730,7 +1060,11 @@ const ChatScreen: React.FC = () => {
   );
 
   const renderChat = () => (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
       <View style={styles.chatHeader}>
         <TouchableOpacity onPress={() => setMode('history')}>
           <Text style={styles.backButton}>←</Text>
@@ -755,13 +1089,103 @@ const ChatScreen: React.FC = () => {
           // Auto-scroll to bottom when layout changes
           flatListRef.current?.scrollToEnd({ animated: true });
         }}
+        maintainVisibleContentPosition={{
+          minIndexForVisible: 0,
+        }}
       />
       {renderMessageInput()}
-    </View>
+    </KeyboardAvoidingView>
+  );
+
+  const renderVoiceChat = () => (
+    <LinearGradient
+      colors={['#CFDE3A', '#003650']}
+      style={styles.voiceChatContainer}
+      start={{ x: 0.5, y: 0 }}
+      end={{ x: 0.5, y: 1 }}
+    >
+      <View style={styles.voiceChatHeader}>
+        <TouchableOpacity onPress={() => setMode('newChat')}>
+          <Text style={styles.voiceChatCloseButton}>✕</Text>
+        </TouchableOpacity>
+        <Text style={[Typography.h3, styles.voiceChatTitle]}>Imago AI</Text>
+        <View style={{ width: 24 }} />
+      </View>
+
+      <View style={styles.voiceChatContent}>
+        {!isRecording ? (
+          <>
+            <ImagoAIAvatarIcon size={80} />
+            <Text style={[Typography.h2, styles.voiceChatGreeting]}>
+              Hi, Chioma
+            </Text>
+            <Text style={[Typography.body, styles.voiceChatSubtitle]}>
+              Ask me anything about your{'\n'}health, your baby, or how you're{'\n'}feeling today. 💜
+            </Text>
+            <View style={styles.voiceChatInstructions}>
+              <Text style={[Typography.body, styles.instructionText]}>
+                Tap the button to start recording
+              </Text>
+            </View>
+            <View style={styles.recordingControls}>
+              <Text style={styles.recordingTime}>00:00</Text>
+              <TouchableOpacity
+                style={styles.recordButton}
+                onPress={startRecording}
+              >
+                <MicrophoneIcon size={24} color="white" />
+              </TouchableOpacity>
+            </View>
+          </>
+        ) : (
+          <>
+            <View style={styles.voiceRecognitionHeader}>
+              <ImagoAIAvatarIcon size={40} />
+              <Text style={[Typography.body, styles.voiceRecognitionLabel]}>
+                Voice recognition
+              </Text>
+            </View>
+            
+            <View style={styles.transcriptionContainer}>
+              <Text style={[Typography.body, styles.transcriptionText]}>
+                Should I be worried about high fetal heartbeat?
+                {'\n\n'}
+                Also Can you explain my last scan results?
+              </Text>
+            </View>
+
+            <View style={styles.waveformContainer}>
+              <Animated.View style={{ 
+                transform: [{ scaleY: waveformAnimation }],
+                opacity: waveformOpacity 
+              }}>
+                <WaveformIcon />
+              </Animated.View>
+            </View>
+
+            <View style={styles.recordingControls}>
+              <Text style={styles.recordingTime}>
+                00:{recordingTime.toString().padStart(2, '0')}
+              </Text>
+              <TouchableOpacity
+                style={styles.stopRecordButton}
+                onPress={stopRecording}
+              >
+                <StopRecordingIcon size={64} />
+              </TouchableOpacity>
+            </View>
+          </>
+        )}
+      </View>
+    </LinearGradient>
   );
 
   const renderNewChat = () => (
-    <View style={styles.container}>
+    <KeyboardAvoidingView 
+      style={styles.container}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+    >
       <View style={styles.chatHeader}>
         <TouchableOpacity onPress={() => setMode('history')}>
           <Text style={styles.closeButton}>✕</Text>
@@ -772,7 +1196,7 @@ const ChatScreen: React.FC = () => {
       <ScrollView contentContainerStyle={styles.newChatContent}>
         <ImagoAIAvatarIcon size={80} />
         <Text style={[Typography.h2, styles.greetingTitle]}>
-          Good afternoon, Chioma
+          {userData ? `${getTimeBasedGreeting()}, ${getFirstName(userData.fullName)}` : 'Hello there'}
         </Text>
         <Text style={[Typography.body, styles.greetingSubtitle]}>
           What will you like to ask?
@@ -804,22 +1228,22 @@ const ChatScreen: React.FC = () => {
             </Text>
             {isSending && (
               <View style={styles.quickActionLoader}>
-                <ActivityIndicator size="small" color={Colors.primary} />
+                <ActivityIndicator size="small" color={Colors.primary[500]} />
               </View>
             )}
           </TouchableOpacity>
           <TouchableOpacity 
             style={[styles.quickAction, isSending && styles.quickActionDisabled]}
-            onPress={() => !isSending && sendQuickMessage('Pre-labour coaching')}
+            onPress={() => !isSending && sendQuickMessage('Breastfeeding tips')}
             disabled={isSending}
           >
             <Text style={styles.quickActionEmoji}>🏃‍♀️</Text>
             <Text style={[Typography.body, styles.quickActionText]}>
-              Pre-labour coaching
+              Breastfeeding tips
             </Text>
             {isSending && (
               <View style={styles.quickActionLoader}>
-                <ActivityIndicator size="small" color={Colors.primary} />
+                <ActivityIndicator size="small" color={Colors.primary[500]} />
               </View>
             )}
           </TouchableOpacity>
@@ -843,6 +1267,52 @@ const ChatScreen: React.FC = () => {
         )}
       </ScrollView>
       {renderMessageInput()}
+    </KeyboardAvoidingView>
+  );
+
+  const renderWebVoiceChat = () => (
+    <View style={styles.container}>
+      <View style={styles.chatHeader}>
+        <TouchableOpacity onPress={() => setMode('history')}>
+          <Text style={styles.closeButton}>✕</Text>
+        </TouchableOpacity>
+        <Text style={[Typography.h3, styles.chatHeaderTitle]}>Voice Chat</Text>
+        <View style={{ width: 24 }} />
+      </View>
+      <WebView
+        // source={{ uri: 'https://voice.imagomum.com' }}
+        source={{ uri: 'https://imagovoice.netlify.app' }}
+        style={styles.webView}
+        javaScriptEnabled={true}
+        domStorageEnabled={true}
+        startInLoadingState={true}
+        scalesPageToFit={true}
+        allowsInlineMediaPlayback={true}
+        mediaPlaybackRequiresUserAction={false}
+        mixedContentMode="compatibility"
+        onError={(syntheticEvent) => {
+          const { nativeEvent } = syntheticEvent;
+          console.error('WebView error: ', nativeEvent);
+          Alert.alert(
+            'Connection Error',
+            'Unable to load voice chat. Please check your internet connection and try again.',
+            [
+              { text: 'Go Back', onPress: () => setMode('history') },
+              { text: 'Retry', onPress: () => setMode('webVoiceChat') }
+            ]
+          );
+        }}
+        onLoadStart={() => console.log('WebView loading started')}
+        onLoadEnd={() => console.log('WebView loading finished')}
+        renderLoading={() => (
+          <View style={styles.webViewLoading}>
+            <ActivityIndicator size="large" color={Colors.primary[500]} />
+            <Text style={[Typography.body, { marginTop: 16, color: Colors.text.secondary }]}>
+              Loading voice chat...
+            </Text>
+          </View>
+        )}
+      />
     </View>
   );
 
@@ -850,25 +1320,26 @@ const ChatScreen: React.FC = () => {
     <View style={styles.inputContainer}>
       {isRecording ? (
         <View style={styles.recordingContainer}>
-          <Text style={[Typography.body, styles.recordingLabel]}>
-            Voice recognition
-          </Text>
-          <Text style={[Typography.body, styles.recordingText]}>
-            Should I be worried about high fetal heartbeat?
-            {'\n\n'}Also Can you explain my last scan results?
-          </Text>
+          <View style={styles.recordingHeader}>
+            <MicrophoneIcon size={20} color="#EF4444" />
+            <Text style={[Typography.body, styles.recordingLabel]}>
+              Recording... {recordingTime}s
+            </Text>
+          </View>
           <Animated.View style={{ 
             transform: [{ scaleY: waveformAnimation }],
             opacity: waveformOpacity 
           }}>
-            <WaveformIcon width={300} height={30} />
+            <WaveformIcon />
           </Animated.View>
-          <Text style={styles.recordingTime}>00:{recordingTime.toString().padStart(2, '0')}</Text>
           <TouchableOpacity
             style={styles.stopRecordingButton}
-            onPress={stopRecording}
+            onPress={() => {
+              console.log('🛑 [UI_DEBUG] Stop button pressed!');
+              stopRecording();
+            }}
           >
-            <StopRecordingIcon size={64} />
+            <StopRecordingIcon size={48} />
           </TouchableOpacity>
         </View>
       ) : (
@@ -883,24 +1354,27 @@ const ChatScreen: React.FC = () => {
             value={messageText}
             onChangeText={setMessageText}
             multiline
+            onFocus={() => {
+              // Scroll to bottom when input is focused
+              setTimeout(() => {
+                flatListRef.current?.scrollToEnd({ animated: true });
+              }, 300);
+            }}
+            blurOnSubmit={false}
+            returnKeyType="send"
+            onSubmitEditing={() => {
+              if (messageText.trim()) {
+                sendMessage();
+              }
+            }}
           />
-          {messageText.trim() ? (
-            <TouchableOpacity
-              style={[styles.sendButton, isSending && styles.sendButtonDisabled]}
-              onPress={sendMessage}
-              disabled={isSending}
-            >
-              <SendIcon size={20} color="white" />
-            </TouchableOpacity>
-          ) : (
-            <TouchableOpacity
-              style={styles.microphoneButton}
-              onPress={startRecording}
-              disabled={isSending}
-            >
-              <MicrophoneIcon size={24} color="white" />
-            </TouchableOpacity>
-          )}
+          <TouchableOpacity
+            style={[styles.sendButton, (!messageText.trim() || isSending) && styles.sendButtonDisabled]}
+            onPress={sendMessage}
+            disabled={!messageText.trim() || isSending}
+          >
+            <SendIcon size={20} color="white" />
+          </TouchableOpacity>
         </View>
       )}
     </View>
@@ -911,6 +1385,7 @@ const ChatScreen: React.FC = () => {
       {mode === 'history' && (hasHistory ? renderChatHistory() : renderEmptyState())}
       {mode === 'chat' && renderChat()}
       {mode === 'newChat' && renderNewChat()}
+      {mode === 'webVoiceChat' && renderWebVoiceChat()}
     </SafeAreaView>
   );
 };
@@ -950,6 +1425,10 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     color: Colors.text.primary,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    gap: Spacing[2],
   },
   // Chat History
   historyList: {
@@ -1151,9 +1630,14 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing[6],
     gap: Spacing[4],
   },
+  recordingHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+  },
   recordingLabel: {
-    color: Colors.gray[600],
-    alignSelf: 'flex-start',
+    color: '#EF4444',
+    fontWeight: '600' as const,
   },
   recordingText: {
     color: Colors.text.primary,
@@ -1192,6 +1676,20 @@ const styles = StyleSheet.create({
     gap: Spacing[2],
   },
   newChatButtonOutlineText: {
+    color: Colors.primary[500],
+  },
+  voiceButtonOutline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[1],
+    paddingHorizontal: Spacing[3],
+    paddingVertical: Spacing[2],
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.primary[500],
+    backgroundColor: 'transparent',
+  },
+  voiceButtonOutlineText: {
     color: Colors.primary[500],
   },
   sendButton: {
@@ -1235,6 +1733,208 @@ const styles = StyleSheet.create({
     color: Colors.gray[600],
     textAlign: 'center',
   },
+  // Voice Chat Styles
+  voiceChatContainer: {
+    flex: 1,
+  },
+  voiceChatHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: Spacing[4],
+    paddingTop: Spacing[4],
+    paddingBottom: Spacing[2],
+  },
+  voiceChatCloseButton: {
+    fontSize: 24,
+    color: '#003650',
+    fontWeight: 'bold',
+  },
+  voiceChatTitle: {
+    color: '#003650',
+    textAlign: 'center',
+  },
+  voiceChatContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: Spacing[6],
+  },
+  voiceChatGreeting: {
+    color: '#003650',
+    textAlign: 'center',
+    marginTop: Spacing[4],
+    marginBottom: Spacing[2],
+  },
+  voiceChatSubtitle: {
+    color: '#003650',
+    textAlign: 'center',
+    opacity: 0.8,
+    marginBottom: Spacing[8],
+  },
+  voiceChatInstructions: {
+    backgroundColor: 'rgba(0, 54, 80, 0.1)',
+    paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[2],
+    borderRadius: 20,
+    marginBottom: Spacing[8],
+  },
+  instructionText: {
+    color: '#003650',
+    textAlign: 'center',
+    opacity: 0.7,
+  },
+  recordingControls: {
+    alignItems: 'center',
+    gap: Spacing[4],
+  },
+  recordButton: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#1997D4',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.3,
+    shadowRadius: 4.65,
+    elevation: 8,
+  },
+  stopRecordButton: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  voiceRecognitionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing[2],
+    marginBottom: Spacing[6],
+    alignSelf: 'flex-start',
+  },
+  voiceRecognitionLabel: {
+    color: '#003650',
+  },
+  transcriptionContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.9)',
+    padding: Spacing[4],
+    borderRadius: 12,
+    marginBottom: Spacing[8],
+    width: '100%',
+  },
+  transcriptionText: {
+    color: '#333333',
+    lineHeight: 24,
+  },
+  waveformContainer: {
+    marginBottom: Spacing[8],
+    alignItems: 'center',
+  },
+  // WebView styles
+  webView: {
+    flex: 1,
+    backgroundColor: Colors.background.primary,
+  },
+  webViewLoading: {
+    flex: 1,
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
+    backgroundColor: Colors.background.primary,
+  },
 });
+
+// Markdown Styles for AI messages
+
+const markdownStyles = {
+  body: {
+    color: Colors.gray[800],
+    fontSize: 16,
+    lineHeight: 24,
+    fontFamily: 'Gilroy-Regular',
+  },
+  heading1: {
+    color: Colors.gray[900],
+    fontSize: 24,
+    fontWeight: 'bold' as const,
+    marginBottom: 16,
+    fontFamily: 'Gilroy-Bold',
+  },
+  heading2: {
+    color: Colors.gray[900],
+    fontSize: 20,
+    fontWeight: 'bold' as const,
+    marginBottom: 12,
+    fontFamily: 'Gilroy-Bold',
+  },
+  heading3: {
+    color: Colors.gray[900],
+    fontSize: 18,
+    fontWeight: '600' as const,
+    marginBottom: 10,
+    fontFamily: 'Gilroy-SemiBold',
+  },
+  paragraph: {
+    marginBottom: 12,
+    color: Colors.gray[800],
+    fontSize: 16,
+    lineHeight: 24,
+    fontFamily: 'Gilroy-Regular',
+  },
+  strong: {
+    fontWeight: 'bold' as const,
+    color: Colors.gray[900],
+    fontFamily: 'Gilroy-Bold',
+  },
+  em: {
+    fontStyle: 'italic' as const,
+    color: Colors.gray[700],
+  },
+  list_item: {
+    marginBottom: 6,
+    color: Colors.gray[800],
+    fontSize: 16,
+    lineHeight: 24,
+    fontFamily: 'Gilroy-Regular',
+  },
+  bullet_list: {
+    marginBottom: 12,
+  },
+  ordered_list: {
+    marginBottom: 12,
+  },
+  code_inline: {
+    backgroundColor: Colors.gray[100],
+    color: Colors.primary[600],
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontSize: 14,
+    fontFamily: 'monospace',
+  },
+  code_block: {
+    backgroundColor: Colors.gray[100],
+    color: Colors.primary[600],
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+    fontSize: 14,
+    fontFamily: 'monospace',
+  },
+  blockquote: {
+    borderLeftWidth: 4,
+    borderLeftColor: Colors.primary[500],
+    paddingLeft: 12,
+    marginBottom: 12,
+    backgroundColor: Colors.gray[50],
+    paddingVertical: 8,
+  },
+  link: {
+    color: Colors.primary[600],
+    textDecorationLine: 'underline' as const,
+  },
+};
 
 export default ChatScreen; 

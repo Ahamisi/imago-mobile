@@ -48,7 +48,6 @@ const OnboardingFlowNavigator: React.FC<OnboardingFlowNavigatorProps> = ({
   const [onboardingState, setOnboardingState] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string>('');
-  const [timeoutReached, setTimeoutReached] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showCompleteModal, setShowCompleteModal] = useState(false);
   const [pregnancyInfo, setPregnancyInfo] = useState<any>(null);
@@ -56,51 +55,68 @@ const OnboardingFlowNavigator: React.FC<OnboardingFlowNavigatorProps> = ({
   useEffect(() => {
     const fetchStatus = async () => {
       try {
+        console.log('🔄 Starting onboarding status fetch...');
         const status = await onboardingService.getStatus();
+        console.log('📦 Onboarding status response:', status);
+        
         if (status.status === 'success') {
           setOnboardingState(status.data.onboarding);
+          setError(''); // Clear any previous errors only on success
+          console.log('✅ Onboarding status loaded successfully');
         } else {
+          console.error('❌ Onboarding status failed:', status.message);
           setError(status.message || 'Failed to load onboarding data.');
         }
-        setError('');
-      } catch (err) {
-        console.error("Failed to fetch onboarding status", err);
-        setError('Failed to load onboarding. Please try again.');
+      } catch (err: any) {
+        console.error("❌ Failed to fetch onboarding status", err);
+        console.error("❌ Error details:", err.response?.data || err.message);
+        
+        // Check if it's a network error or API doesn't exist
+        if (err.response?.status === 404) {
+          setError('Onboarding service not available. Skipping to main app...');
+          // Skip onboarding if endpoint doesn't exist
+          setTimeout(() => {
+            onOnboardingComplete(user);
+          }, 2000);
+        } else {
+          setError('Failed to load onboarding. Please try again.');
+        }
       } finally {
         setLoading(false);
       }
     };
 
-    const timeoutId = setTimeout(() => {
-      if (loading) {
-        setTimeoutReached(true);
-        setLoading(false);
-        setError('Something went wrong. Please try again.');
-      }
-    }, 60000);
-
     fetchStatus();
-
-    return () => clearTimeout(timeoutId);
   }, []);
 
   const handleCompleteStep = async (payload: { answerType: 'exact_date' | 'approximate_month'; answer: string | { month: number; year: number } }) => {
     setIsSubmitting(true);
     setError('');
+    
     try {
+      console.log('📝 Submitting onboarding answer...');
       const response = await onboardingService.submitAnswer({ 
         questionId: onboardingState?.nextQuestion?.id || 'lmp_date', 
         ...payload 
       });
       
-      if (response.status === 'success' && response.data.isCompleted) {
+      console.log('📦 Onboarding submission response:', response);
+      
+      if (response.status === 'success' && response.data.onboarding.isCompleted) {
+        console.log('✅ Onboarding submission successful - completed!');
         setPregnancyInfo(response.data.pregnancyInfo);
         setShowCompleteModal(true);
+      } else if (response.status === 'success') {
+        console.log('✅ Onboarding submission successful - more steps needed');
+        // Handle case where there are more onboarding steps
+        setError('More onboarding steps required.');
       } else {
+        console.log('❌ Onboarding submission failed:', response.message);
         setError(response.message || 'Failed to submit. Please try again.');
       }
-    } catch (err) {
-      console.error("Failed to submit answer", err);
+    } catch (err: any) {
+      console.error("❌ Failed to submit answer", err);
+      console.error("❌ Error details:", err.response?.data || err.message);
       setError('Failed to save your answer. Please try again.');
     } finally {
       setIsSubmitting(false);
@@ -108,12 +124,11 @@ const OnboardingFlowNavigator: React.FC<OnboardingFlowNavigatorProps> = ({
   };
 
   const handleRetryOrGoBack = () => {
-    if (timeoutReached || error) {
+    if (error) {
       onTimeout();
     } else {
       setLoading(true);
       setError('');
-      setTimeoutReached(false);
     }
   };
 
@@ -133,17 +148,15 @@ const OnboardingFlowNavigator: React.FC<OnboardingFlowNavigatorProps> = ({
     );
   }
 
-  if (error || timeoutReached) {
+  if (error) {
     return (
       <View style={styles.errorContainer}>
         <Text style={styles.errorTitle}>Oops! Something went wrong</Text>
         <Text style={styles.errorMessage}>
-          {error || 'The request is taking longer than expected. Please try logging in again.'}
+          {error || 'Something went wrong. Please try again.'}
         </Text>
         <TouchableOpacity style={styles.retryButton} onPress={handleRetryOrGoBack}>
-          <Text style={styles.retryButtonText}>
-            {timeoutReached ? 'Back to Login' : 'Try Again'}
-          </Text>
+          <Text style={styles.retryButtonText}>Try Again</Text>
         </TouchableOpacity>
       </View>
     );

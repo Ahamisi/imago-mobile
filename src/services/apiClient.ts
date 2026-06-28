@@ -1,9 +1,11 @@
 import axios, { AxiosError } from 'axios';
 import { showNotification } from '../../App';
 import StorageService from '../utils/storage';
+import { handleGlobalLogout } from './navigationService';
 
 const apiClient = axios.create({
-  baseURL: 'http://172.20.10.3:3000/api/v1',
+  baseURL: 'https://imagomum-backend.agreeablebeach-10200fd5.eastus2.azurecontainerapps.io/api/v1',
+  // baseURL: 'http://172.20.10.3:3000/api/v1',
   // baseURL: 'https://dev-api.myigarage.com/api/v1',
   
   // Don't set default Content-Type - let each request set its own
@@ -43,6 +45,25 @@ apiClient.interceptors.response.use(
 
     if (error.response) {
       const responseData = error.response.data as { message?: string, status?: string };
+      
+      // Handle 401 Unauthorized - token expired or invalid
+      if (error.response.status === 401) {
+        // Don't auto-logout for login/signup requests - let them handle their own 401s
+        const isAuthRequest = error.config?.url?.includes('/auth/login') || 
+                             error.config?.url?.includes('/auth/signup') ||
+                             error.config?.url?.includes('/auth/verify-otp');
+        
+        if (!isAuthRequest) {
+          console.log('🔐 401 Unauthorized - Token expired, logging out...');
+          handleGlobalLogout();
+          return Promise.reject(error); // Don't show notification for 401, just logout
+        } else {
+          console.log('🔐 401 Unauthorized on auth request - letting auth service handle it');
+          // Let the auth service handle login/signup 401 errors - don't show notification
+          return Promise.reject(error);
+        }
+      }
+      
       if (responseData.message) {
         errorMessage = responseData.message;
       }

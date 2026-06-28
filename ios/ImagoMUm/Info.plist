@@ -5,7 +5,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>ImagoMUm</string>
+	<string>Imago Mum</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -31,28 +31,18 @@
 		<key>NSAllowsLocalNetworking</key>
 		<true/>
 	</dict>
-	<key>NSLocationWhenInUseUsageDescription</key>
-	<string/>
 	<key>NSCameraUsageDescription</key>
 	<string>ImagoMUm needs access to your camera to take ultrasound scan photos.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>ImagoMUm may use your location to provide personalized pregnancy care recommendations based on your region.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>ImagoMUm needs access to your microphone for future video features.</string>
+	<string>ImagoMUm needs access to your microphone for voice conversations with the AI pregnancy assistant.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>ImagoMUm needs access to your photo library to save and manage ultrasound scan images and pregnancy photos.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>ImagoMUm uses speech recognition to convert your voice messages into text for AI conversations about your pregnancy care.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
-	<key>UILaunchStoryboardName</key>
-	<string>LaunchScreen</string>
-	<key>UIRequiredDeviceCapabilities</key>
-	<array>
-		<string>arm64</string>
-	</array>
-	<key>UISupportedInterfaceOrientations</key>
-	<array>
-		<string>UIInterfaceOrientationPortrait</string>
-		<string>UIInterfaceOrientationLandscapeLeft</string>
-		<string>UIInterfaceOrientationLandscapeRight</string>
-	</array>
-	<key>UIViewControllerBasedStatusBarAppearance</key>
-	<false/>
 	<key>UIAppFonts</key>
 	<array>
 		<string>Gilroy-Black.ttf</string>
@@ -76,5 +66,19 @@
 		<string>Gilroy-UltraLight.ttf</string>
 		<string>Gilroy-UltraLightItalic.ttf</string>
 	</array>
+	<key>UILaunchStoryboardName</key>
+	<string>LaunchScreen</string>
+	<key>UIRequiredDeviceCapabilities</key>
+	<array>
+		<string>arm64</string>
+	</array>
+	<key>UISupportedInterfaceOrientations</key>
+	<array>
+		<string>UIInterfaceOrientationPortrait</string>
+		<string>UIInterfaceOrientationLandscapeLeft</string>
+		<string>UIInterfaceOrientationLandscapeRight</string>
+	</array>
+	<key>UIViewControllerBasedStatusBarAppearance</key>
+	<false/>
 </dict>
 </plist>

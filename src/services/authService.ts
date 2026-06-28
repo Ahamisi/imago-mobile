@@ -62,17 +62,25 @@ class AuthService {
       const status = error.response.status;
       const data = error.response.data as any;
       
+      // Always prioritize the backend message if available
+      if (data?.message) {
+        return new Error(data.message);
+      }
+      
+      // Fallback to status-specific messages
       switch (status) {
         case 400:
-          return new Error(data?.message || 'Invalid request. Please check your input.');
+          return new Error('Invalid request. Please check your input.');
         case 401:
-          return new Error(data?.message || 'Authentication failed. Please login again.');
+          return new Error('Authentication failed. Please login again.');
         case 404:
           return new Error('Service not found. Please check if the server is running.');
+        case 409:
+          return new Error('A conflict occurred. Please check your input and try again.');
         case 500:
           return new Error('Server error. Please try again later.');
         default:
-          return new Error(data?.message || `Request failed with status ${status}`);
+          return new Error(`Request failed with status ${status}`);
       }
     } else if (error.request) {
       // Network error
@@ -157,7 +165,8 @@ class AuthService {
       return response.data;
     } catch (error) {
       console.error('❌ SignUp Error:', error);
-      throw error;
+      // Format the error to extract the backend message
+      throw this.formatError(error);
     }
   }
 
@@ -207,14 +216,15 @@ class AuthService {
       const response = await apiClient.post<VerifyOTPResponse>('/auth/login', payload);
       
       // Store tokens and user data if login successful
-      if (response.data.status === 'success' && response.data.data?.tokens && response.data.data?.user) {
+      if (response.data.status === 'success' && response.data.data?.tokens && response.data.data.user) {
         await this.setTokensAndUser(response.data.data.tokens, response.data.data.user);
       }
 
       return response.data;
     } catch (error) {
       console.error('❌ Login Error:', error);
-      throw error;
+      // Format the error to extract the backend message
+      throw this.formatError(error);
     }
   }
 
@@ -254,9 +264,18 @@ class AuthService {
   // Logout user
   async logout(): Promise<void> {
     try {
-      // TODO: Call logout endpoint if needed
       console.log('👋 Logging out...');
       
+      // Call logout endpoint to invalidate token on server
+      try {
+        await apiClient.post('/auth/logout');
+        console.log('✅ Server logout successful');
+      } catch (error) {
+        console.warn('⚠️ Server logout failed, continuing with local logout:', error);
+        // Continue with local logout even if server call fails
+      }
+      
+      // Clear local tokens
       this.accessToken = null;
       this.refreshToken = null;
       
@@ -266,6 +285,7 @@ class AuthService {
       console.log('✅ User logged out, all data cleared');
     } catch (error) {
       console.error('❌ Logout Error:', error);
+      throw error;
     }
   }
 

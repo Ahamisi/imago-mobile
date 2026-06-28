@@ -4,10 +4,10 @@
  */
 
 import React, {useState, useEffect, Fragment} from 'react';
-import {NavigationContainer} from '@react-navigation/native';
 import {createNativeStackNavigator} from '@react-navigation/native-stack';
 import {Alert} from 'react-native';
 import {RootStackParamList} from '../types/navigation';
+import {setNavigationHandlers} from '../services/navigationService';
 
 // Screens
 import SplashScreen from '../screens/SplashScreen';
@@ -20,6 +20,7 @@ import MainNavigator from './MainNavigator';
 
 // Components
 import SuccessModal from '../components/SuccessModal';
+import InitializingLoader from '../components/InitializingLoader';
 
 // Services
 import authService from '../services/authService';
@@ -54,6 +55,11 @@ const RootNavigator: React.FC = () => {
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
 
+  // Register navigation handlers for global logout
+  useEffect(() => {
+    setNavigationHandlers(setCurrentScreen, setUserData, setAuthToken);
+  }, []);
+
   // Initialize app - check for existing authentication
   useEffect(() => {
     const initializeApp = async () => {
@@ -70,11 +76,17 @@ const RootNavigator: React.FC = () => {
           
           // Check if onboarding is completed (assume completed for existing users)
           const userOnboarding = (authData.userData as any).onboarding;
-          if (userOnboarding?.isCompleted !== false) {
-            // Default to main screen for existing authenticated users
-            setCurrentScreen('main');
-          } else {
+          console.log('🔍 User onboarding data:', userOnboarding);
+          console.log('🔍 Onboarding completed?', userOnboarding?.isCompleted);
+          
+          if (userOnboarding?.isCompleted === false) {
+            // User needs to complete onboarding
+            console.log('➡️ Redirecting to onboarding flow');
             setCurrentScreen('onboarding_flow');
+          } else {
+            // Default to main screen for existing authenticated users or if onboarding is completed/undefined
+            console.log('➡️ Redirecting to main app');
+            setCurrentScreen('main');
           }
         } else {
           console.log('ℹ️ No authentication found, showing onboarding');
@@ -89,6 +101,7 @@ const RootNavigator: React.FC = () => {
         console.error('❌ App initialization error:', error);
         setCurrentScreen('onboarding');
       } finally {
+        console.log('🏁 App initialization complete');
         setIsInitializing(false);
       }
     };
@@ -182,10 +195,10 @@ const RootNavigator: React.FC = () => {
 
   const handleContinueToApp = () => {
     setShowSuccessModal(false); // Hide modal
-    if (userData?.onboarding?.isCompleted) {
-      setCurrentScreen('main');
-    } else {
+    if (userData?.onboarding?.isCompleted === false) {
       setCurrentScreen('onboarding_flow');
+    } else {
+      setCurrentScreen('main');
     }
   };
 
@@ -243,6 +256,8 @@ const RootNavigator: React.FC = () => {
     }
   };
 
+
+
   return (
     <Fragment>
       <Stack.Navigator
@@ -252,7 +267,13 @@ const RootNavigator: React.FC = () => {
           animation: 'fade',
         }}>
         
-        {(currentScreen === 'splash' || isInitializing) && (
+        {isInitializing && (
+          <Stack.Screen name="InitializingLoader">
+            {() => <InitializingLoader />}
+          </Stack.Screen>
+        )}
+        
+        {currentScreen === 'splash' && !isInitializing && (
           <Stack.Screen name="Splash">
             {() => <SplashScreen onFinish={handleSplashFinish} />}
           </Stack.Screen>

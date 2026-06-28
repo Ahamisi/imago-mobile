@@ -5,6 +5,7 @@
 
 export type RootStackParamList = {
   Splash: undefined;
+  InitializingLoader: undefined;
   Onboarding: undefined;
   SignUp: undefined;
   Login: undefined;
@@ -31,6 +32,7 @@ export type AuthStackParamList = {
 export type MainTabParamList = {
   Home: undefined;
   Scan: undefined;
+  Audio: undefined;
   Tips: undefined;
   Chat: undefined;
   Profile: undefined;
@@ -48,6 +50,13 @@ export type ScanStackParamList = {
   ScanResults: undefined;
   UploadFile: undefined;
   AIAnalysis: undefined;
+};
+
+export type MainStackParamList = {
+  MainTabs: undefined;
+  Camera: undefined;
+  ScanResult: { scanId: string };
+  TipStoryViewer: { tip: any };
 };
 
 export type TipsStackParamList = {

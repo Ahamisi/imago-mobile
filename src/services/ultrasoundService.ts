@@ -4,37 +4,37 @@ import apiClient from './apiClient';
 
 export interface UltrasoundScan {
   id: string;
-  userId: string;
-  fileName: string;
-  fileUrl: string;
-  fileType: string;
-  uploadedAt: string;
-  status: 'uploading' | 'processing' | 'completed' | 'failed';
+  originalFileName: string;
+  scanType: string;
+  gestationalAge: string;
+  scanDate: string;
+  notes: string | null;
+  fileSize: number;
+  mimeType: string;
+  viewCount: number;
+  fileUrls: {
+    localPath: string;
+    cloudUrl: string;
+    sentToAI: string;
+  };
   aiAnalysis?: {
-    status?: 'pending' | 'processing' | 'completed' | 'failed';
-    message?: string;
-    fetalHeartbeat?: {
-      value: number;
-      unit: string;
-      status: 'normal' | 'abnormal';
+    status: 'pending' | 'processing' | 'completed' | 'failed';
+    confidenceScore: string;
+    findings: {
+      analysis_id: string;
+      analysis_text: string;
+      processed_timestamp: string;
     };
-    fetalSize?: {
-      value: number;
-      unit: string;
-    };
-    gestationalAge?: {
-      weeks: number;
-      days: number;
-      formatted: string;
-    };
-    fetalPosition?: string;
-    edd?: {
-      date: string;
-      formatted: string;
-    };
-    recommendations?: string[];
-    healthStatus?: string;
-    scanDate?: string;
+    recommendations: string[];
+    modelVersion: string;
+    processingTime: number;
+    completedAt: string;
+  };
+  medicalReview: {
+    status: 'pending' | 'completed';
+    reviewedBy: string | null;
+    reviewedAt: string | null;
+    notes: string | null;
   };
 }
 
@@ -44,12 +44,27 @@ export interface UploadProgress {
   message: string;
 }
 
+export interface ScanHistoryItem {
+  id: string;
+  originalFileName: string;
+  scanType: string;
+  scanDate: string;
+  gestationalAge: string;
+  aiAnalysisStatus: 'pending' | 'processing' | 'completed' | 'failed';
+  aiConfidenceScore: string;
+  medicalReviewStatus: 'pending' | 'completed';
+  viewCount: number;
+}
+
 export interface PaginatedScans {
-  scans: UltrasoundScan[];
-  total: number;
-  page: number;
-  limit: number;
-  hasNext: boolean;
+  scans: ScanHistoryItem[];
+  pagination: {
+    currentPage: number;
+    totalPages: number;
+    totalCount: number;
+    hasNextPage: boolean;
+    hasPrevPage: boolean;
+  };
 }
 
 class UltrasoundService {
@@ -205,21 +220,41 @@ class UltrasoundService {
           
           return {
             id: scanId,
-            userId: 'user_123',
-            fileName: 'mock-scan.jpg',
-            fileUrl: 'mock-file-url',
-            fileType: 'image/jpg',
-            uploadedAt: new Date().toISOString(),
-            status: 'completed',
+            originalFileName: 'mock-scan.jpg',
+            scanType: '2D',
+            gestationalAge: '24 weeks',
+            scanDate: '2025-08-15',
+            notes: null,
+            fileSize: 192311,
+            mimeType: 'image/jpeg',
+            viewCount: 1,
+            fileUrls: {
+              localPath: '/mock/path/scan.jpg',
+              cloudUrl: 'https://mock-cloud-url.com/scan.jpg',
+              sentToAI: 'https://mock-cloud-url.com/scan.jpg'
+            },
             aiAnalysis: {
-              fetalHeartbeat: { value: 145, unit: 'bpm', status: 'normal' },
-              fetalSize: { value: 12.5, unit: 'cm' },
-              gestationalAge: { weeks: 24, days: 3, formatted: '24 weeks, 3 days' },
-              fetalPosition: 'Head down (vertex)',
-              edd: { date: '2025-07-15', formatted: 'July 15, 2025' },
-              recommendations: ['Continue regular prenatal care', 'Maintain healthy diet'],
-              healthStatus: 'Everything looks great!',
-              scanDate: new Date().toISOString(),
+              status: 'completed',
+              confidenceScore: '0.8500',
+              findings: {
+                analysis_id: 'mock-analysis-id',
+                analysis_text: 'Mock analysis: The fetus appears healthy with normal development patterns. Heart rate is within normal range at approximately 145 bpm. Estimated gestational age is consistent with dating. No anomalies detected.',
+                processed_timestamp: new Date().toISOString()
+              },
+              recommendations: [
+                'Continue regular prenatal care',
+                'Maintain healthy diet and exercise',
+                'Schedule next appointment in 4 weeks'
+              ],
+              modelVersion: 'mock-model-v1',
+              processingTime: 15000,
+              completedAt: new Date().toISOString()
+            },
+            medicalReview: {
+              status: 'pending',
+              reviewedBy: null,
+              reviewedAt: null,
+              notes: null
             }
           };
         }
@@ -238,7 +273,7 @@ class UltrasoundService {
     try {
       const response = await apiClient.get(`/ultrasounds/${scanId}`);
       console.log('Scan details response:', response.data);
-      return response.data.data;
+      return response.data.data.scan;
     } catch (error: any) {
       console.error('Failed to fetch scan details:', error);
       
@@ -247,26 +282,99 @@ class UltrasoundService {
         console.log('Backend unavailable, returning mock scan details');
         return {
           id: scanId,
-          userId: 'user_123',
-          fileName: 'mock-scan.jpg',
-          fileUrl: 'mock-file-url',
-          fileType: 'image/jpg',
-          uploadedAt: new Date().toISOString(),
-          status: 'completed',
+          originalFileName: 'mock-scan.jpg',
+          scanType: '2D',
+          gestationalAge: '24 weeks',
+          scanDate: '2025-08-15',
+          notes: null,
+          fileSize: 192311,
+          mimeType: 'image/jpeg',
+          viewCount: 1,
+          fileUrls: {
+            localPath: '/mock/path/scan.jpg',
+            cloudUrl: 'https://mock-cloud-url.com/scan.jpg',
+            sentToAI: 'https://mock-cloud-url.com/scan.jpg'
+          },
           aiAnalysis: {
-            fetalHeartbeat: { value: 145, unit: 'bpm', status: 'normal' },
-            fetalSize: { value: 12.5, unit: 'cm' },
-            gestationalAge: { weeks: 24, days: 3, formatted: '24 weeks, 3 days' },
-            fetalPosition: 'Head down (vertex)',
-            edd: { date: '2025-07-15', formatted: 'July 15, 2025' },
-            recommendations: ['Continue regular prenatal care', 'Maintain healthy diet'],
-            healthStatus: 'Everything looks great!',
-            scanDate: new Date().toISOString(),
+            status: 'completed',
+            confidenceScore: '0.8500',
+            findings: {
+              analysis_id: 'mock-analysis-id',
+              analysis_text: 'Mock analysis: The fetus appears healthy with normal development patterns. Heart rate is within normal range at approximately 145 bpm. Estimated gestational age is consistent with dating. No anomalies detected.',
+              processed_timestamp: new Date().toISOString()
+            },
+            recommendations: [
+              'Continue regular prenatal care',
+              'Maintain healthy diet and exercise',
+              'Schedule next appointment in 4 weeks'
+            ],
+            modelVersion: 'mock-model-v1',
+            processingTime: 15000,
+            completedAt: new Date().toISOString()
+          },
+          medicalReview: {
+            status: 'pending',
+            reviewedBy: null,
+            reviewedAt: null,
+            notes: null
           }
         };
       }
       
       throw error; // Re-throw other errors
+    }
+  }
+
+  // Get scan history with pagination
+  async getScanHistory(page: number = 1, limit: number = 10): Promise<PaginatedScans> {
+    console.log(`Fetching scan history - page: ${page}, limit: ${limit}`);
+    
+    try {
+      const response = await apiClient.get(`/ultrasounds?page=${page}&limit=${limit}`);
+      console.log('Scan history response:', response.data);
+      return response.data.data;
+    } catch (error: any) {
+      console.error('Failed to fetch scan history:', error);
+      
+      // If backend is not available, return mock data for demo
+      if (error.code === 'ECONNREFUSED' || error.message?.includes('Network Error')) {
+        console.log('Backend unavailable, returning mock scan history');
+        return {
+          scans: [
+            {
+              id: 'mock-scan-1',
+              originalFileName: 'ultrasound-scan-1.jpg',
+              scanType: '2D',
+              scanDate: '2025-08-15',
+              gestationalAge: '20 Weeks',
+              aiAnalysisStatus: 'completed',
+              aiConfidenceScore: '0.8500',
+              medicalReviewStatus: 'pending',
+              viewCount: 5
+            },
+            {
+              id: 'mock-scan-2',
+              originalFileName: 'ultrasound-scan-2.jpg',
+              scanType: '2D',
+              scanDate: '2025-08-13',
+              gestationalAge: '18 Weeks',
+              aiAnalysisStatus: 'completed',
+              aiConfidenceScore: '0.9200',
+              medicalReviewStatus: 'pending',
+              viewCount: 3
+            }
+          ],
+          pagination: {
+            currentPage: 1,
+            totalPages: 1,
+            totalCount: 2,
+            hasNextPage: false,
+            hasPrevPage: false
+          }
+        };
+      }
+      
+      throw error;
     }
   }
 

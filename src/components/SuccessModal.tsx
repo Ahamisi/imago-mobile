@@ -45,7 +45,7 @@ const SuccessModal: React.FC<SuccessModalProps> = ({ isVisible, onContinue, preg
       <View style={styles.overlay}>
         <View style={styles.successCard}>
           <View style={styles.iconContainer}>
-            <CheckIcon size={64} />
+            <CheckIcon size={48} />
           </View>
           <Text style={styles.title}>
             {pregnancyInfo ? "You're all set, Mama!" : 'Successful'}
@@ -88,17 +88,19 @@ const styles = StyleSheet.create({
         backgroundColor: 'rgba(0, 0, 0, 0.4)',
     },
     successCard: {
-        width: '100%',
+        width: '85%',
+        maxWidth: 320,
         backgroundColor: Colors.white,
         borderRadius: BorderRadius.xl,
-        padding: Spacing[8],
-        paddingTop: Spacing[10],
+        padding: Spacing[6],
+        paddingTop: Spacing[8],
         alignItems: 'center',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.15,
         shadowRadius: 12,
         elevation: 8,
+        marginHorizontal: Spacing[6],
     },
     iconContainer: {
         marginBottom: Spacing[6],

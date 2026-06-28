@@ -79,6 +79,11 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     if (errors[field]) {
       setErrors(prev => ({...prev, [field]: undefined}));
     }
+    
+    // Clear general error message when user starts typing
+    if (errorMessage) {
+      setErrorMessage('');
+    }
   };
 
   const handleLogin = async () => {
@@ -100,17 +105,19 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
     } catch (error: any) {
       console.error('Login failed:', error);
       
-      // Check for specific error messages
-      const errorMsg = error.response?.data?.message || error.message;
+      // The auth service already formats the error message
+      const errorMsg = error?.message || 'Login failed. Please try again.';
       
       if (errorMsg === "Please verify your account first") {
         // This will be handled by the navigator - user will be redirected to OTP
         return;
-      } else if (errorMsg === "Invalid credentials" || 
-                 error.response?.status === 401) {
+      } else if (errorMsg.toLowerCase().includes('invalid') || errorMsg.toLowerCase().includes('incorrect')) {
+        // Show both field-specific error AND general message for invalid credentials
         setErrors({password: 'Incorrect Password'});
+        setErrorMessage(errorMsg); // Also show the backend message
       } else {
-        setErrorMessage(errorMsg || 'Login failed. Please try again.');
+        // Show general error message for other errors
+        setErrorMessage(errorMsg);
       }
     } finally {
       setLoading(false);
@@ -155,7 +162,7 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
               <Text style={styles.label}>Email address</Text>
               <TextInput
                 style={[styles.input, errors.email && styles.inputError]}
-                placeholder="yellow@gmail.com"
+                placeholder="chioma@gmail.com"
                 value={formData.email}
                 onChangeText={(text) => handleInputChange('email', text)}
                 keyboardType="email-address"
@@ -212,9 +219,10 @@ const LoginScreen: React.FC<LoginScreenProps> = ({
           {/* General Error Message */}
           {errorMessage && (
             <View style={styles.errorContainer}>
-              <Text style={styles.errorText}>{errorMessage}</Text>
+              <Text style={styles.errorMessageText}>{errorMessage}</Text>
             </View>
           )}
+
 
           {/* Login Button */}
           <TouchableOpacity
@@ -293,10 +301,14 @@ const styles = StyleSheet.create({
     fontWeight: '400',
   },
   input: {
-    ...Typography.body,
+    fontSize: 16,
+    fontFamily: Typography.body.fontFamily,
+    fontWeight: '400',
+    lineHeight: 20,
     backgroundColor: Colors.background.secondary,
     borderRadius: BorderRadius.lg,
     paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[4],
     borderWidth: 1,
     borderColor: Colors.gray[200],
     color: Colors.text.primary,
@@ -315,9 +327,13 @@ const styles = StyleSheet.create({
     height: 52,
   },
   passwordInput: {
-    ...Typography.body,
+    fontSize: 16,
+    fontFamily: Typography.body.fontFamily,
+    fontWeight: '400',
+    lineHeight: 20,
     flex: 1,
     paddingHorizontal: Spacing[4],
+    paddingVertical: Spacing[4],
     color: Colors.text.primary,
   },
   eyeButton: {
@@ -398,15 +414,16 @@ const styles = StyleSheet.create({
   errorContainer: {
     marginBottom: Spacing[4],
     padding: Spacing[3],
-    backgroundColor: Colors.error[50],
+    backgroundColor: '#FEF2F2', // Light red background
     borderRadius: BorderRadius.md,
     borderWidth: 1,
-    borderColor: Colors.error[200],
+    borderColor: '#FECACA', // Light red border
   },
-  errorText: {
+  errorMessageText: {
     ...Typography.bodySmall,
-    color: Colors.error[600],
+    color: Colors.error, // Use the main error color
     textAlign: 'center',
+    fontWeight: '500',
   },
 });
 
