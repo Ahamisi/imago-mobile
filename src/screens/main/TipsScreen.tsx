@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, BorderRadius } from '../../theme';
 import { SearchIcon } from '../../components/icons';
+import { getWeeklyTips } from '../../services/deliveriesService';
 
 interface Tip {
   id: string;
@@ -201,16 +202,21 @@ const TipsScreen: React.FC<TipsScreenProps> = ({ navigation }) => {
   const loadTips = async () => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API call
-      // const response = await tipsService.getTips();
-      // setTips(response.data.tips);
-      
-      // For now, use mock data
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate loading
+      // Fetch the mother's precomputed weekly delivery (CMS spec §10).
+      const weeklyTips = await getWeeklyTips();
+      if (weeklyTips.length > 0) {
+        setTips(weeklyTips);
+        setFeaturedTip(weeklyTips[0]);
+      } else {
+        // No delivery for this week yet — show sample content so the screen
+        // isn't empty. Real weekly content replaces this once published.
+        setTips(MOCK_TIPS);
+        setFeaturedTip(MOCK_TIPS[0]);
+      }
+    } catch (error) {
+      console.error('Failed to load weekly tips:', error);
       setTips(MOCK_TIPS);
       setFeaturedTip(MOCK_TIPS[0]);
-    } catch (error) {
-      console.error('Failed to load tips:', error);
     } finally {
       setLoading(false);
     }
