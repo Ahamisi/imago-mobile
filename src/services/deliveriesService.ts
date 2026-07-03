@@ -135,4 +135,18 @@ export async function getWeeklyTips(): Promise<Tip[]> {
   return delivery.topics.map(topicToTip);
 }
 
-export default { getCurrentDelivery, getWeeklyTips };
+/**
+ * Browse the evergreen content library by category (the category tabs).
+ * Pass no category (or 'trending') for the weekly delivery instead.
+ */
+export async function getLibraryTips(category?: string): Promise<Tip[]> {
+  if (!category || category === 'trending') return getWeeklyTips();
+  const response = await apiClient.get('/content-library', {
+    params: { category },
+    headers: { 'X-Skip-Success-Notification': 'true' },
+  });
+  const topics: DeliveryTopic[] = response.data?.data?.topics ?? [];
+  return topics.map(topicToTip);
+}
+
+export default { getCurrentDelivery, getWeeklyTips, getLibraryTips };
