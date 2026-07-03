@@ -1,26 +1,28 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, {useState, useEffect, useRef, useCallback} from 'react';
 import {
   View,
   Text,
   StyleSheet,
   Image,
-  TouchableOpacity,
   Animated,
   Dimensions,
   StatusBar,
+  Easing,
+  Pressable,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Colors, Typography, Spacing } from '../../theme';
-import { CloseIcon } from '../../components/icons';
+import LinearGradient from 'react-native-linear-gradient';
+import {SafeAreaView} from 'react-native-safe-area-context';
+import {Colors, Typography, Spacing} from '../../theme';
+import {CloseIcon} from '../../components/icons';
 
 interface TipSlide {
   id: string;
-  image?: string; // Optional - for image slides
-  backgroundColor?: string; // Optional - for text-only slides
+  image?: string;
+  backgroundColor?: string;
   title: string;
   content: string;
   duration?: number;
-  isTextOnly?: boolean; // Flag for text-only slides
+  isTextOnly?: boolean;
 }
 
 interface Tip {
@@ -32,333 +34,272 @@ interface Tip {
 }
 
 interface TipStoryViewerProps {
-  route: { params: { tip: Tip } };
+  route: {params: {tip: Tip}};
   navigation: any;
 }
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-const STORY_DURATION = 5000; // 5 seconds default
+const {width: SCREEN_WIDTH} = Dimensions.get('window');
+const DEFAULT_DURATION = 5;
 
-const TipStoryViewer: React.FC<TipStoryViewerProps> = ({ route, navigation }) => {
-  const { tip } = route.params;
-  const [currentSlideIndex, setCurrentSlideIndex] = useState(0);
-  const [isPaused, setIsPaused] = useState(false);
-  const [isPressed, setIsPressed] = useState(false);
-  
-  const progressAnimations = useRef(
-    tip.slides.map(() => new Animated.Value(0))
-  ).current;
-  const currentAnimation = useRef<Animated.CompositeAnimation | null>(null);
+const TipStoryViewer: React.FC<TipStoryViewerProps> = ({route, navigation}) => {
+  const {tip} = route.params;
+  const slides = tip.slides && tip.slides.length ? tip.slides : [];
 
+  const [index, setIndex] = useState(0);
+  const progress = useRef(new Animated.Value(0)).current;
+  const animRef = useRef<Animated.CompositeAnimation | null>(null);
+  const pausedAt = useRef(0);
+  const heldRef = useRef(false);
+
+  const durationMs = useCallback(
+    (i: number) => (slides[i]?.duration || DEFAULT_DURATION) * 1000,
+    [slides],
+  );
+
+  // Preload every image up front so slide transitions never flash a blank frame.
   useEffect(() => {
+    slides.forEach(s => {
+      if (s.image) {
+        Image.prefetch(s.image).catch(() => {});
+      }
+    });
     StatusBar.setBarStyle('light-content');
-    StatusBar.setBackgroundColor('transparent', true);
-    
-    return () => {
-      StatusBar.setBarStyle('dark-content');
-    };
-  }, []);
+    return () => StatusBar.setBarStyle('dark-content');
+  }, [slides]);
+
+  const goNext = useCallback(() => {
+    animRef.current?.stop();
+    if (index < slides.length - 1) {
+      progress.setValue(0);
+      setIndex(index + 1);
+    } else {
+      navigation.goBack();
+    }
+  }, [index, slides.length, navigation, progress]);
+
+  const goPrev = useCallback(() => {
+    animRef.current?.stop();
+    if (index > 0) {
+      progress.setValue(0);
+      setIndex(index - 1);
+    } else {
+      progress.setValue(0);
+      setIndex(0);
+    }
+  }, [index, progress]);
+
+  // Play the current slide from `from` (0..1), covering the remaining time.
+  const play = useCallback(
+    (from: number) => {
+      progress.setValue(from);
+      animRef.current = Animated.timing(progress, {
+        toValue: 1,
+        duration: durationMs(index) * (1 - from),
+        easing: Easing.linear,
+        useNativeDriver: false,
+      });
+      animRef.current.start(({finished}) => {
+        if (finished) {
+          goNext();
+        }
+      });
+    },
+    [index, durationMs, progress, goNext],
+  );
 
   useEffect(() => {
-    startProgress();
-    return () => {
-      if (currentAnimation.current) {
-        currentAnimation.current.stop();
-      }
-    };
-  }, [currentSlideIndex, isPaused]);
+    play(0);
+    return () => animRef.current?.stop();
+    // Restart whenever the slide changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
 
-  const startProgress = () => {
-    if (isPaused || isPressed) return;
-
-    const currentSlide = tip.slides[currentSlideIndex];
-    const duration = (currentSlide.duration || 5) * 1000;
-
-    currentAnimation.current = Animated.timing(
-      progressAnimations[currentSlideIndex],
-      {
-        toValue: 1,
-        duration,
-        useNativeDriver: false,
-      }
-    );
-
-    currentAnimation.current.start(({ finished }) => {
-      if (finished && !isPaused) {
-        nextSlide();
-      }
+  const handlePressIn = () => {
+    heldRef.current = false;
+    progress.stopAnimation(v => {
+      pausedAt.current = v;
     });
   };
 
-  const pauseProgress = () => {
-    setIsPaused(true);
-    if (currentAnimation.current) {
-      currentAnimation.current.stop();
-    }
-  };
-
-  const resumeProgress = () => {
-    setIsPaused(false);
-    setIsPressed(false);
-  };
-
-  const nextSlide = () => {
-    if (currentSlideIndex < tip.slides.length - 1) {
-      setCurrentSlideIndex(currentSlideIndex + 1);
-      // Reset previous progress bars
-      progressAnimations.forEach((anim, index) => {
-        if (index <= currentSlideIndex) {
-          anim.setValue(index < currentSlideIndex ? 1 : 0);
-        }
-      });
-    } else {
-      // End of story
-      navigation.goBack();
-    }
-  };
-
-  const previousSlide = () => {
-    if (currentSlideIndex > 0) {
-      setCurrentSlideIndex(currentSlideIndex - 1);
-      // Reset progress bars
-      progressAnimations.forEach((anim, index) => {
-        if (index >= currentSlideIndex - 1) {
-          anim.setValue(index < currentSlideIndex - 1 ? 1 : 0);
-        }
-      });
-    } else {
-      navigation.goBack();
-    }
-  };
-
-  const handleTapGesture = (event: any) => {
-    const { x } = event.nativeEvent;
-    const isLeftSide = x < SCREEN_WIDTH / 2;
-    
-    if (isLeftSide) {
-      previousSlide();
-    } else {
-      nextSlide();
-    }
-  };
-
-  const handlePressIn = () => {
-    setIsPressed(true);
-    pauseProgress();
+  const handleLongPress = () => {
+    heldRef.current = true; // suppress the tap-navigation on release
   };
 
   const handlePressOut = () => {
-    setIsPressed(false);
-    resumeProgress();
+    play(pausedAt.current);
   };
 
-  const currentSlide = tip.slides[currentSlideIndex];
+  const handleTap = (side: 'left' | 'right') => {
+    if (heldRef.current) return; // was a hold-to-pause, not a tap
+    if (side === 'left') {
+      goPrev();
+    } else {
+      goNext();
+    }
+  };
+
+  const slide = slides[index];
+  if (!slide) {
+    return <View style={styles.container} />;
+  }
+  const showImage = !!slide.image && !slide.isTextOnly;
+  const isCover = index === 0;
 
   return (
     <View style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
-      
-      {/* Background - Either Image or Solid Color */}
-      {currentSlide.isTextOnly ? (
-        <View style={[styles.backgroundSolid, { backgroundColor: currentSlide.backgroundColor || Colors.primary[500] }]} />
+
+      {/* Background */}
+      {showImage ? (
+        <Image source={{uri: slide.image}} style={styles.background} resizeMode="cover" />
       ) : (
-        <Image 
-          source={{ uri: currentSlide.image }} 
-          style={styles.backgroundImage}
+        <View
+          style={[
+            styles.background,
+            {backgroundColor: slide.backgroundColor || Colors.primary[500]},
+          ]}
         />
       )}
-      
-      {/* Dark Overlay - Only for image slides */}
-      {!currentSlide.isTextOnly && <View style={styles.overlay} />}
 
-      {/* Progress Bars */}
-      <SafeAreaView style={styles.progressContainer}>
-        <View style={styles.progressBars}>
-          {tip.slides.map((_, index) => (
-            <View key={index} style={styles.progressBarBackground}>
+      {/* Top + bottom gradients for legibility */}
+      <LinearGradient
+        colors={['rgba(0,0,0,0.55)', 'rgba(0,0,0,0)']}
+        style={styles.topScrim}
+        pointerEvents="none"
+      />
+      <LinearGradient
+        colors={['rgba(0,0,0,0)', 'rgba(0,0,0,0.35)', 'rgba(0,0,0,0.9)']}
+        style={styles.bottomScrim}
+        pointerEvents="none"
+      />
+
+      {/* Tap zones (left = prev, right = next; hold = pause) */}
+      <Pressable
+        style={[styles.zone, styles.leftZone]}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onLongPress={handleLongPress}
+        delayLongPress={200}
+        onPress={() => handleTap('left')}
+      />
+      <Pressable
+        style={[styles.zone, styles.rightZone]}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        onLongPress={handleLongPress}
+        delayLongPress={200}
+        onPress={() => handleTap('right')}
+      />
+
+      {/* Progress bars */}
+      <SafeAreaView style={styles.top} pointerEvents="box-none">
+        <View style={styles.progressRow}>
+          {slides.map((_, i) => (
+            <View key={i} style={styles.barBg}>
               <Animated.View
                 style={[
-                  styles.progressBarFill,
+                  styles.barFill,
                   {
-                    width: progressAnimations[index].interpolate({
-                      inputRange: [0, 1],
-                      outputRange: ['0%', '100%'],
-                    }),
+                    width:
+                      i < index
+                        ? '100%'
+                        : i === index
+                        ? progress.interpolate({
+                            inputRange: [0, 1],
+                            outputRange: ['0%', '100%'],
+                          })
+                        : '0%',
                   },
                 ]}
               />
             </View>
           ))}
         </View>
+
+        <Pressable
+          style={styles.close}
+          onPress={() => navigation.goBack()}
+          hitSlop={16}>
+          <CloseIcon size={22} color={Colors.white} />
+        </Pressable>
       </SafeAreaView>
 
-      {/* Close Button - Outside SafeAreaView */}
-      <TouchableOpacity 
-        style={styles.closeButton}
-        onPress={() => navigation.goBack()}
-        hitSlop={{ top: 15, bottom: 15, left: 15, right: 15 }}
-      >
-        <CloseIcon size={24} color={Colors.white} />
-      </TouchableOpacity>
-
       {/* Content */}
-      <View style={styles.content}>
-        <View style={currentSlide.isTextOnly ? styles.contentTextOnly : styles.contentGradient}>
-          <Text style={currentSlide.isTextOnly ? styles.titleTextOnly : styles.title}>
-            {currentSlide.title}
-          </Text>
-          {currentSlide.content && (
-            <Text style={currentSlide.isTextOnly ? styles.descriptionTextOnly : styles.description}>
-              {currentSlide.content}
-            </Text>
-          )}
-        </View>
-      </View>
-
-      {/* Invisible Touch Areas */}
-      <TouchableOpacity
-        style={[styles.touchArea, styles.leftTouchArea]}
-        onPress={handleTapGesture}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        activeOpacity={1}
-      />
-      <TouchableOpacity
-        style={[styles.touchArea, styles.rightTouchArea]}
-        onPress={handleTapGesture}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        activeOpacity={1}
-      />
+      <SafeAreaView style={styles.content} pointerEvents="none">
+        {isCover ? (
+          <>
+            <Text style={styles.coverTitle}>{slide.title}</Text>
+            {!!slide.content && <Text style={styles.coverSubtitle}>{slide.content}</Text>}
+          </>
+        ) : (
+          <>
+            {!!slide.title && <Text style={styles.textTitle}>{slide.title}</Text>}
+            <Text style={styles.bodyText}>{slide.content}</Text>
+          </>
+        )}
+      </SafeAreaView>
     </View>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.black,
-  },
-  backgroundImage: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  backgroundSolid: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    width: '100%',
-    height: '100%',
-  },
-  overlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-  },
-  progressContainer: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    zIndex: 10,
-  },
-  progressBars: {
+  container: {flex: 1, backgroundColor: Colors.black},
+  background: {position: 'absolute', top: 0, left: 0, right: 0, bottom: 0},
+  topScrim: {position: 'absolute', top: 0, left: 0, right: 0, height: 160},
+  bottomScrim: {position: 'absolute', left: 0, right: 0, bottom: 0, height: '55%'},
+  zone: {position: 'absolute', top: 0, bottom: 0, zIndex: 5},
+  leftZone: {left: 0, width: SCREEN_WIDTH * 0.35},
+  rightZone: {right: 0, width: SCREEN_WIDTH * 0.65},
+  top: {position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20},
+  progressRow: {
     flexDirection: 'row',
-    paddingHorizontal: Spacing[4],
+    paddingHorizontal: Spacing[3],
     paddingTop: Spacing[2],
-    gap: Spacing[1],
+    gap: 4,
   },
-  progressBarBackground: {
+  barBg: {
     flex: 1,
     height: 3,
-    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    backgroundColor: 'rgba(255,255,255,0.35)',
     borderRadius: 2,
     overflow: 'hidden',
   },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: Colors.white,
-    borderRadius: 2,
-  },
-  closeButton: {
-    position: 'absolute',
-    top: 60, // Fixed position below status bar
-    right: Spacing[4],
-    padding: Spacing[2],
-    zIndex: 30,
-    backgroundColor: 'rgba(0, 0, 0, 0.3)',
-    borderRadius: 20,
-  },
+  barFill: {height: '100%', backgroundColor: Colors.white, borderRadius: 2},
+  close: {alignSelf: 'flex-end', padding: Spacing[3], marginRight: Spacing[2]},
   content: {
     position: 'absolute',
-    bottom: 0,
     left: 0,
     right: 0,
-  },
-  contentGradient: {
-    backgroundColor: 'rgba(0, 0, 0, 0.7)',
+    bottom: 0,
     padding: Spacing[6],
-    paddingBottom: Spacing[8],
+    paddingBottom: Spacing[10],
+    zIndex: 10,
   },
-  contentTextOnly: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing[8],
-    paddingTop: 100, // Account for progress bars and close button
-    paddingBottom: Spacing[12],
-  },
-  title: {
-    ...Typography.h2,
-    color: Colors.white,
-    marginBottom: Spacing[3],
-    fontWeight: '700' as const,
-    lineHeight: 32,
-  },
-  description: {
-    ...Typography.body,
-    color: Colors.white,
-    lineHeight: 24,
-    opacity: 0.95,
-  },
-  titleTextOnly: {
+  coverTitle: {
     ...Typography.h1,
     color: Colors.white,
-    marginBottom: Spacing[6],
-    fontWeight: '800' as const,
-    lineHeight: 40,
-    textAlign: 'center',
+    fontWeight: '800',
+    fontSize: 30,
+    lineHeight: 38,
+    marginBottom: Spacing[3],
   },
-  descriptionTextOnly: {
+  coverSubtitle: {
+    ...Typography.body,
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 17,
+    lineHeight: 24,
+  },
+  textTitle: {
     ...Typography.h3,
     color: Colors.white,
-    lineHeight: 28,
-    textAlign: 'center',
-    opacity: 0.95,
+    fontWeight: '700',
+    marginBottom: Spacing[2],
   },
-  touchArea: {
-    position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: '50%',
-    zIndex: 5,
-  },
-  leftTouchArea: {
-    left: 0,
-  },
-  rightTouchArea: {
-    right: 0,
+  bodyText: {
+    color: Colors.white,
+    fontSize: 21,
+    lineHeight: 30,
+    fontWeight: '500',
   },
 });
 
