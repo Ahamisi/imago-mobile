@@ -123,12 +123,13 @@ function topicToTip(topic: DeliveryTopic): Tip {
           duration: 4,
         };
       }
-      // Text slides render as short, readable colour cards.
+      // Text slides render short copy over the (dimmed) cover image.
       return {
         id: `${topic.id}-t${i}`,
         title: '',
         content: s.text || '',
-        isTextOnly: true,
+        image: s.image || undefined,
+        isTextOnly: !s.image,
         backgroundColor: bg,
         duration: 6,
       };
