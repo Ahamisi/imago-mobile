@@ -49,9 +49,11 @@ apiClient.interceptors.response.use(
       // Handle 401 Unauthorized - token expired or invalid
       if (error.response.status === 401) {
         // Don't auto-logout for login/signup requests - let them handle their own 401s
-        const isAuthRequest = error.config?.url?.includes('/auth/login') || 
+        const isAuthRequest = error.config?.url?.includes('/auth/login') ||
                              error.config?.url?.includes('/auth/signup') ||
-                             error.config?.url?.includes('/auth/verify-otp');
+                             error.config?.url?.includes('/auth/verify-otp') ||
+                             error.config?.url?.includes('/auth/forgot-password') ||
+                             error.config?.url?.includes('/auth/reset-password');
         
         if (!isAuthRequest) {
           console.log('🔐 401 Unauthorized - Token expired, logging out...');
