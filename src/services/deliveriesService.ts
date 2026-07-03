@@ -26,6 +26,14 @@ export interface DeliveryItem {
   media: DeliveryMedia[];
 }
 
+export interface StorySlide {
+  type: 'cover' | 'text';
+  image?: string | null;
+  title?: string;
+  subtitle?: string;
+  text?: string;
+}
+
 export interface DeliveryTopic {
   id: string;
   title: string;
@@ -34,6 +42,7 @@ export interface DeliveryTopic {
   category: string;
   estimatedReadMins?: number;
   items: DeliveryItem[];
+  slides?: StorySlide[];
 }
 
 export interface CurrentDelivery {
@@ -97,18 +106,48 @@ function slideImage(item: DeliveryItem): string | undefined {
 
 /** Map a delivery topic to a Tip (story card). */
 function topicToTip(topic: DeliveryTopic): Tip {
-  const slides: TipSlide[] = (topic.items || []).map((item) => {
-    const image = slideImage(item);
-    return {
-      id: item.id,
-      title: item.title,
-      content: stripMarkdown(item.body),
-      image,
-      isTextOnly: !image,
-      backgroundColor: CATEGORY_COLORS[topic.category] || '#0E5DD8',
-      duration: 6,
-    };
-  });
+  const bg = CATEGORY_COLORS[topic.category] || '#0E5DD8';
+
+  let slides: TipSlide[];
+  if (topic.slides && topic.slides.length > 0) {
+    // Preferred: the backend story template (cover slide + short text slides).
+    slides = topic.slides.map((s, i) => {
+      if (s.type === 'cover') {
+        return {
+          id: `${topic.id}-cover`,
+          title: s.title || topic.title,
+          content: s.subtitle || '',
+          image: s.image || undefined,
+          isTextOnly: !s.image, // titled colour card until a real cover exists
+          backgroundColor: bg,
+          duration: 4,
+        };
+      }
+      // Text slides render as short, readable colour cards.
+      return {
+        id: `${topic.id}-t${i}`,
+        title: '',
+        content: s.text || '',
+        isTextOnly: true,
+        backgroundColor: bg,
+        duration: 6,
+      };
+    });
+  } else {
+    // Fallback (older payloads): one slide per item.
+    slides = (topic.items || []).map((item) => {
+      const image = slideImage(item);
+      return {
+        id: item.id,
+        title: item.title,
+        content: stripMarkdown(item.body),
+        image,
+        isTextOnly: !image,
+        backgroundColor: bg,
+        duration: 6,
+      };
+    });
+  }
 
   return {
     id: topic.id,
