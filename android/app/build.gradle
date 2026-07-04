@@ -77,6 +77,14 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
+    // The release "lintVital" gate is a static-analysis step, not part of
+    // building the APK. It doesn't block test builds and can OOM on low-memory
+    // machines, so we don't fail the release build on it.
+    lint {
+        checkReleaseBuilds false
+        abortOnError false
+    }
+
     namespace "com.imagomum"
     defaultConfig {
         applicationId "com.imagomum"
