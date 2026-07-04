@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { launchImageLibrary, ImagePickerResponse } from 'react-native-image-picker';
-import DocumentPicker from 'react-native-document-picker';
+import {pick, types, errorCodes, isErrorWithCode} from '@react-native-documents/picker';
 import { Colors, Typography, Spacing } from '../../theme';
 import { ultrasoundService, UploadProgress } from '../../services/ultrasoundService';
 import { UploadIcon, CameraIcon, DeviceIcon } from '../../components/icons';
@@ -38,19 +38,18 @@ const UploadScanScreen: React.FC<UploadScanScreenProps> = ({ navigation }) => {
 
   const handleDocumentPicker = async () => {
     try {
-      const result = await DocumentPicker.pick({
-        type: [DocumentPicker.types.images, DocumentPicker.types.pdf],
-        copyTo: 'documentDirectory',
+      const result = await pick({
+        type: [types.images, types.pdf],
       });
 
       const file = result[0];
       uploadFile({
-        uri: file.fileCopyUri || file.uri,
-        type: file.type,
-        name: file.name,
+        uri: file.uri,
+        type: file.type || 'application/octet-stream',
+        name: file.name || 'file',
       });
     } catch (error) {
-      if (!DocumentPicker.isCancel(error)) {
+      if (!(isErrorWithCode(error) && error.code === errorCodes.OPERATION_CANCELED)) {
         Alert.alert('Error', 'Failed to select file');
       }
     }

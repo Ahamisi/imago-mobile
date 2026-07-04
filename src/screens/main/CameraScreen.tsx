@@ -13,7 +13,7 @@ import {
 } from '../../components/icons';
 import ProgressStageIcon from '../../components/icons/ProgressStageIcon';
 import { launchImageLibrary } from 'react-native-image-picker';
-import DocumentPicker from 'react-native-document-picker';
+import {pick, types} from '@react-native-documents/picker';
 import { ultrasoundService, UploadProgress } from '../../services/ultrasoundService';
 import UploadProgressModal from './components/UploadProgressModal';
 import AIScanningIndicator from './components/AIScanningIndicator';
@@ -90,8 +90,8 @@ const CameraScreen = ({ navigation }: any) => {
 
   const handleDocumentPicker = async () => {
     try {
-      const result = await DocumentPicker.pick({
-        type: [DocumentPicker.types.allFiles],
+      const result = await pick({
+        type: [types.allFiles],
       });
       if (result && result.length > 0) {
         const file = result[0];
