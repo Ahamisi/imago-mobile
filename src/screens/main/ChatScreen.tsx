@@ -15,7 +15,7 @@ import {
   KeyboardAvoidingView,
   Keyboard,
 } from 'react-native';
-import DocumentPicker from 'react-native-document-picker';
+import {pick, types, errorCodes, isErrorWithCode} from '@react-native-documents/picker';
 import { Colors } from '../../theme/colors';
 import { Typography } from '../../theme/typography';
 import { Spacing } from '../../theme/spacing';
@@ -409,8 +409,8 @@ const ChatScreen: React.FC = () => {
   // File picker functionality
   const handleFilePicker = async () => {
     try {
-      const result = await DocumentPicker.pick({
-        type: [DocumentPicker.types.images, DocumentPicker.types.audio],
+      const result = await pick({
+        type: [types.images, types.audio],
         allowMultiSelection: false,
       });
       
@@ -432,7 +432,7 @@ const ChatScreen: React.FC = () => {
         }
       }
     } catch (err) {
-      if (DocumentPicker.isCancel(err)) {
+      if (isErrorWithCode(err) && err.code === errorCodes.OPERATION_CANCELED) {
         console.log('User cancelled file picker');
       } else {
         console.error('File picker error:', err);

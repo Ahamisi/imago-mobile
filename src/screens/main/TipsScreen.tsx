@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors, Typography, Spacing, BorderRadius } from '../../theme';
 import { SearchIcon } from '../../components/icons';
+import { getWeeklyTips, getLibraryTips } from '../../services/deliveriesService';
 
 interface Tip {
   id: string;
@@ -36,12 +37,17 @@ interface TipsScreenProps {
   navigation: any;
 }
 
+// Category ids match the backend ContentTopic.category taxonomy so tabs map to
+// real, source-backed library content. 'trending' shows the weekly delivery.
 const CATEGORIES = [
-  { id: 'trending', label: 'Trending now', active: true },
-  { id: 'nutrition', label: 'Nutrition', active: false },
-  { id: 'exercise', label: 'Exercise', active: false },
-  { id: 'mental-health', label: 'Mental Health', active: false },
-  { id: 'wellness', label: 'Wellness', active: false },
+  { id: 'trending', label: 'Trending now' },
+  { id: 'baby_dev', label: 'Baby' },
+  { id: 'nutrition', label: 'Nutrition' },
+  { id: 'antenatal_care', label: 'Antenatal' },
+  { id: 'exercise', label: 'Exercise' },
+  { id: 'mental_health', label: 'Mental Health' },
+  { id: 'wellness', label: 'Wellness' },
+  { id: 'warning_signs', label: 'Warning Signs' },
 ];
 
 // Mock data - will be replaced with backend data
@@ -195,22 +201,38 @@ const TipsScreen: React.FC<TipsScreenProps> = ({ navigation }) => {
   const [featuredTip, setFeaturedTip] = useState<Tip | null>(null);
 
   useEffect(() => {
-    loadTips();
+    loadContent('trending');
   }, []);
 
-  const loadTips = async () => {
+  const loadContent = async (category: string) => {
     try {
       setLoading(true);
-      // TODO: Replace with actual API call
-      // const response = await tipsService.getTips();
-      // setTips(response.data.tips);
-      
-      // For now, use mock data
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate loading
-      setTips(MOCK_TIPS);
-      setFeaturedTip(MOCK_TIPS[0]);
+      if (category === 'trending') {
+        // "Trending" = the mother's precomputed weekly delivery (CMS spec §10).
+        const weeklyTips = await getWeeklyTips();
+        if (weeklyTips.length > 0) {
+          setTips(weeklyTips);
+          setFeaturedTip(weeklyTips[0]);
+        } else {
+          // No delivery yet — sample content so the screen isn't empty.
+          setTips(MOCK_TIPS);
+          setFeaturedTip(MOCK_TIPS[0]);
+        }
+      } else {
+        // Category tab = browse the evergreen, source-backed library.
+        const libraryTips = await getLibraryTips(category);
+        setTips(libraryTips);
+        setFeaturedTip(null); // no featured card when browsing a category
+      }
     } catch (error) {
-      console.error('Failed to load tips:', error);
+      console.error('Failed to load content:', error);
+      if (category === 'trending') {
+        setTips(MOCK_TIPS);
+        setFeaturedTip(MOCK_TIPS[0]);
+      } else {
+        setTips([]);
+        setFeaturedTip(null);
+      }
     } finally {
       setLoading(false);
     }
@@ -222,7 +244,7 @@ const TipsScreen: React.FC<TipsScreenProps> = ({ navigation }) => {
 
   const handleCategoryPress = (categoryId: string) => {
     setSelectedCategory(categoryId);
-    // TODO: Filter tips by category
+    loadContent(categoryId);
   };
 
   const renderFeaturedTip = () => {
@@ -332,7 +354,7 @@ const TipsScreen: React.FC<TipsScreenProps> = ({ navigation }) => {
         {renderCategoryTabs()}
         
         <FlatList
-          data={tips.filter(tip => selectedCategory === 'trending' || tip.category === selectedCategory)}
+          data={tips}
           renderItem={renderTipCard}
           keyExtractor={(item) => item.id}
           numColumns={2}

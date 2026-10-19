@@ -46,6 +46,16 @@ export interface ResendOTPResponse {
   };
 }
 
+export interface ForgotPasswordResponse {
+  status: 'success' | 'fail';
+  message: string;
+}
+
+export interface ResetPasswordResponse {
+  status: 'success' | 'fail';
+  message: string;
+}
+
 class AuthService {
   private accessToken: string | null = null;
   private refreshToken: string | null = null;
@@ -203,6 +213,41 @@ class AuthService {
     } catch (error) {
       console.error('❌ Resend OTP Error:', error);
       throw error;
+    }
+  }
+
+  // Request a password reset code (6-digit OTP sent to the user's email).
+  // Backend always returns a generic success to avoid account enumeration.
+  async forgotPassword(email: string): Promise<ForgotPasswordResponse> {
+    try {
+      console.log('📧 Requesting password reset code...');
+      const response = await apiClient.post<ForgotPasswordResponse>(
+        '/auth/forgot-password',
+        { email },
+      );
+      return response.data;
+    } catch (error) {
+      console.error('❌ Forgot Password Error:', error);
+      throw this.formatError(error);
+    }
+  }
+
+  // Complete a password reset using the emailed 6-digit code.
+  async resetPassword(
+    email: string,
+    otp: string,
+    newPassword: string,
+  ): Promise<ResetPasswordResponse> {
+    try {
+      console.log('🔑 Resetting password...');
+      const response = await apiClient.post<ResetPasswordResponse>(
+        '/auth/reset-password',
+        { email, otp, newPassword },
+      );
+      return response.data;
+    } catch (error) {
+      console.error('❌ Reset Password Error:', error);
+      throw this.formatError(error);
     }
   }
 

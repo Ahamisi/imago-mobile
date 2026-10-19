@@ -15,6 +15,8 @@ import OnboardingScreen from '../screens/OnboardingScreen';
 import SignUpScreen, {SignUpPayload} from '../screens/SignUpScreen';
 import OTPVerificationScreen from '../screens/OTPVerificationScreen';
 import LoginScreen from '../screens/LoginScreen';
+import ForgotPasswordScreen from '../screens/ForgotPasswordScreen';
+import ResetPasswordScreen from '../screens/ResetPasswordScreen';
 import OnboardingFlowNavigator from './OnboardingFlowNavigator';
 import MainNavigator from './MainNavigator';
 
@@ -48,8 +50,9 @@ interface UserData {
 }
 
 const RootNavigator: React.FC = () => {
-  const [currentScreen, setCurrentScreen] = useState<'splash' | 'onboarding' | 'signup' | 'login' | 'otp' | 'main' | 'onboarding_flow'>('splash');
+  const [currentScreen, setCurrentScreen] = useState<'splash' | 'onboarding' | 'signup' | 'login' | 'otp' | 'forgot_password' | 'reset_password' | 'main' | 'onboarding_flow'>('splash');
   const [signUpData, setSignUpData] = useState<SignUpPayload | null>(null);
+  const [resetEmail, setResetEmail] = useState<string>('');
   const [userData, setUserData] = useState<UserData | null>(null);
   const [authToken, setAuthToken] = useState<string>('');
   const [showSuccessModal, setShowSuccessModal] = useState(false);
@@ -207,7 +210,36 @@ const RootNavigator: React.FC = () => {
   };
 
   const handleForgotPassword = () => {
-    Alert.alert('Coming Soon', 'Password reset will be available soon!');
+    setCurrentScreen('forgot_password');
+  };
+
+  // Step 1: request a reset code, then advance to the reset screen.
+  const handleForgotPasswordSubmit = async (email: string) => {
+    const response = await authService.forgotPassword(email);
+    if (response.status !== 'success') {
+      throw new Error(response.message || 'Failed to send reset code.');
+    }
+    setResetEmail(email);
+    setCurrentScreen('reset_password');
+  };
+
+  // Step 2: complete the reset, then return to login.
+  const handleResetPasswordSubmit = async (otp: string, newPassword: string) => {
+    const response = await authService.resetPassword(resetEmail, otp, newPassword);
+    if (response.status !== 'success') {
+      throw new Error(response.message || 'Failed to reset password.');
+    }
+    setResetEmail('');
+    setCurrentScreen('login');
+  };
+
+  const handleResendResetCode = async (email: string) => {
+    await authService.forgotPassword(email);
+  };
+
+  const handleBackToLoginFromReset = () => {
+    setResetEmail('');
+    setCurrentScreen('login');
   };
 
   const handleOnboardingTimeout = () => {
@@ -307,7 +339,31 @@ const RootNavigator: React.FC = () => {
               <LoginScreen
                 onLogin={handleLogin}
                 onCreateAccountPress={handleGetStarted}
-                onForgotPassword={() => {}}
+                onForgotPassword={handleForgotPassword}
+              />
+            )}
+          </Stack.Screen>
+        )}
+
+        {currentScreen === 'forgot_password' && (
+          <Stack.Screen name="ForgotPassword">
+            {() => (
+              <ForgotPasswordScreen
+                onSubmit={handleForgotPasswordSubmit}
+                onBackToLogin={handleSignIn}
+              />
+            )}
+          </Stack.Screen>
+        )}
+
+        {currentScreen === 'reset_password' && (
+          <Stack.Screen name="ResetPassword">
+            {() => (
+              <ResetPasswordScreen
+                email={resetEmail}
+                onSubmit={handleResetPasswordSubmit}
+                onResend={handleResendResetCode}
+                onBackToLogin={handleBackToLoginFromReset}
               />
             )}
           </Stack.Screen>
